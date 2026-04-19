@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { PermissionReminder } from '@/components/PermissionReminder'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useHistoryStore } from '@/features/history/store'
 import { useRemindersStore } from '@/features/reminders/store'
@@ -80,12 +81,65 @@ export const MainScreen: React.FC = () => {
   const lastEntry = history.length > 0 ? history[history.length - 1] : null
 
   return (
-    <div className="p-4 pb-20">
-      <h1 className="text-3xl font-bold mb-2">Напоминание о лекарствах</h1>
+    <>
+      <PermissionReminder />
+      <div className="md:grid md:grid-cols-2 md:gap-6 md:max-w-6xl md:mx-auto p-4 pb-20">
+        {/* Левая колонка: список лекарств */}
+        <div className="md:col-span-1 order-2 md:order-1">
+          <h2 className="text-2xl font-bold mb-4 hidden md:block">Список лекарств</h2>
 
-      {/* АКТИВНОЕ НАПОМИНАНИЕ */}
-      {activeReminder && (
-        <Card className="mb-6 bg-red-50 border-2 border-red-400 animate-pulse">
+          {/* СПИСОК ЛЕКАРСТВ */}
+          {medicines.length === 0 ? (
+            <Card>
+              <p className="text-gray-600 mb-4">Нет добавленных лекарств</p>
+              <Link href="/add">
+                <Button variant="primary" className="w-full">
+                  Добавить лекарство
+                </Button>
+              </Link>
+            </Card>
+          ) : (
+            <div className="space-y-3 mb-4">
+              {medicines.map((medicine) => (
+                <Card
+                  key={medicine.id}
+                  className={`border-2 ${
+                    activeReminder?.medicineId === medicine.id
+                      ? 'border-red-400 bg-red-50'
+                      : 'border-blue-200'
+                  }`}
+                >
+                  <h3 className="text-lg font-bold mb-2">{medicine.name}</h3>
+                  <p className="text-gray-600 mb-1">{medicine.dosage}</p>
+                  <p className="text-sm text-gray-500">
+                    {medicine.customTimes && medicine.customTimes.length > 0
+                      ? medicine.customTimes.join(', ')
+                      : medicine.scheduleType}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {lastEntry && (
+            <Card className="mt-6">
+              <p className="text-sm text-gray-600">
+                Последний прием:{' '}
+                <span className="font-bold">
+                  {new Date(lastEntry.takenAt).toLocaleTimeString('ru-RU')}
+                </span>
+              </p>
+            </Card>
+          )}
+        </div>
+
+        {/* Правая колонка: активное напоминание и действия */}
+        <div className="md:col-span-1 order-1 md:order-2">
+          <h1 className="text-3xl font-bold mb-4 md:hidden">Напоминание о лекарствах</h1>
+
+          {/* АКТИВНОЕ НАПОМИНАНИЕ */}
+          {activeReminder && (
+            <Card className="mb-6 bg-red-50 border-2 border-red-400 animate-pulse">
           <div className="mb-4 p-3 bg-red-100 rounded text-red-900 text-center font-bold text-lg">
             🔔 ПОРА ПРИНЯТЬ ЛЕКАРСТВО
           </div>
@@ -133,63 +187,21 @@ export const MainScreen: React.FC = () => {
         </Card>
       )}
 
-      {!activeReminder && (
-        <div className="mb-6 p-3 bg-green-50 rounded text-green-900 text-sm">
-          ✓ Нет активных напоминаний
+          {!activeReminder && (
+            <div className="mb-6 p-3 bg-green-50 rounded text-green-900 text-sm">
+              ✓ Нет активных напоминаний
+            </div>
+          )}
+
+          {actionMessage && (
+            <div className="mt-4 p-3 bg-green-100 text-green-900 rounded text-center font-semibold">
+              {actionMessage}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* СПИСОК ЛЕКАРСТВ */}
-      {medicines.length === 0 ? (
-        <Card>
-          <p className="text-gray-600 mb-4">Нет добавленных лекарств</p>
-          <Link href="/add">
-            <Button variant="primary" className="w-full">
-              Добавить лекарство
-            </Button>
-          </Link>
-        </Card>
-      ) : (
-        <div className="space-y-3 mb-4">
-          {medicines.map((medicine) => (
-            <Card
-              key={medicine.id}
-              className={`border-2 ${
-                activeReminder?.medicineId === medicine.id
-                  ? 'border-red-400 bg-red-50'
-                  : 'border-blue-200'
-              }`}
-            >
-              <h3 className="text-lg font-bold mb-2">{medicine.name}</h3>
-              <p className="text-gray-600 mb-1">{medicine.dosage}</p>
-              <p className="text-sm text-gray-500">
-                {medicine.customTimes && medicine.customTimes.length > 0
-                  ? medicine.customTimes.join(', ')
-                  : medicine.scheduleType}
-              </p>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {actionMessage && (
-        <div className="mt-4 p-3 bg-green-100 text-green-900 rounded text-center font-semibold">
-          {actionMessage}
-        </div>
-      )}
-
-      {lastEntry && (
-        <Card className="mt-6">
-          <p className="text-sm text-gray-600">
-            Последний прием:{' '}
-            <span className="font-bold">
-              {new Date(lastEntry.takenAt).toLocaleTimeString('ru-RU')}
-            </span>
-          </p>
-        </Card>
-      )}
-
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t flex gap-2">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t flex gap-2 md:relative md:border-t-0 md:mt-6">
         <Link href="/add" className="flex-1">
           <Button variant="primary" className="w-full">
             + Добавить
@@ -206,6 +218,6 @@ export const MainScreen: React.FC = () => {
           </Button>
         </Link>
       </div>
-    </div>
+    </>
   )
 }

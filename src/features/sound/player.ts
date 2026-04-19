@@ -1,3 +1,5 @@
+import { handleSoundError } from '@/lib/errorHandler'
+
 let audioElement: HTMLAudioElement | null = null
 
 export const playSound = async (url: string, volume: number = 1.0): Promise<void> => {
@@ -11,22 +13,30 @@ export const playSound = async (url: string, volume: number = 1.0): Promise<void
     audioElement.src = url
     audioElement.volume = Math.min(1.0, Math.max(0, volume))
 
-    return audioElement.play()
+    await audioElement.play()
   } catch (e) {
-    console.error('Failed to play sound:', e)
+    handleSoundError(e)
   }
 }
 
 export const stopSound = (): void => {
-  if (audioElement) {
-    audioElement.pause()
-    audioElement.currentTime = 0
+  try {
+    if (audioElement) {
+      audioElement.pause()
+      audioElement.currentTime = 0
+    }
+  } catch (e) {
+    handleSoundError(e)
   }
 }
 
 export const setVolume = (volume: number): void => {
-  if (audioElement) {
-    audioElement.volume = Math.min(1.0, Math.max(0, volume))
+  try {
+    if (audioElement) {
+      audioElement.volume = Math.min(1.0, Math.max(0, volume))
+    }
+  } catch (e) {
+    handleSoundError(e)
   }
 }
 

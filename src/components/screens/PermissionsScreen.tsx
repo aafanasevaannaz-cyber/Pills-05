@@ -11,19 +11,24 @@ interface PermissionsScreenProps {
 
 export const PermissionsScreen: React.FC<PermissionsScreenProps> = ({ onComplete }) => {
   const [requested, setRequested] = useState(false)
+  const [granted, setGranted] = useState(false)
 
   const handleRequestPermission = async () => {
-    const granted = await requestNotificationPermission()
+    const result = await requestNotificationPermission()
     setRequested(true)
-    if (!granted) {
-      // Даже если отказали, продолжаем работу
-      setTimeout(onComplete, 2000)
-    } else {
+    if (result) {
+      setGranted(true)
+      localStorage.setItem('permissions_shown', 'true')
       setTimeout(onComplete, 1500)
+    } else {
+      // Пользователь отказал — запомнить для повторного предложения
+      localStorage.setItem('permissions_denied', 'true')
+      setTimeout(onComplete, 2000)
     }
   }
 
   const handleSkip = () => {
+    localStorage.setItem('permissions_denied', 'true')
     onComplete()
   }
 
@@ -37,9 +42,15 @@ export const PermissionsScreen: React.FC<PermissionsScreenProps> = ({ onComplete
             Приложение будет напоминать вам о приеме лекарств.
           </p>
 
-          {requested && (
-            <p className="text-sm text-gray-500 mb-6">
-              ✓ Спасибо! Уведомления настроены.
+          {requested && granted && (
+            <p className="text-sm text-green-600 mb-6 font-semibold">
+              ✓ Спасибо! Уведомления включены.
+            </p>
+          )}
+
+          {requested && !granted && (
+            <p className="text-sm text-red-600 mb-6">
+              Разрешения не даны. Вы можете включить их в настройках позже.
             </p>
           )}
 
@@ -50,15 +61,13 @@ export const PermissionsScreen: React.FC<PermissionsScreenProps> = ({ onComplete
               onClick={handleRequestPermission}
               disabled={requested}
             >
-              {requested ? '✓ Готово' : 'Разрешить'}
+              {requested ? (granted ? '✓ Готово' : '✗ Отказано') : 'Разрешить'}
             </Button>
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={handleSkip}
-            >
-              Позже
-            </Button>
+            {!requested && (
+              <Button variant="secondary" className="w-full" onClick={handleSkip}>
+                Позже
+              </Button>
+            )}
           </div>
 
           <p className="text-xs text-gray-500 mt-6">

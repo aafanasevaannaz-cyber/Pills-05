@@ -6,11 +6,13 @@ import {
   shouldShowReminder,
   getNextRetryTime,
 } from './generator'
+import { scheduleReminderForMedicine, cancelRemindersForMedicine } from './reminder.logic'
 
 interface RemindersStore {
   reminders: Reminder[]
   activeReminder: Reminder | null
   lastCheckTime: number
+  platform: 'web' | 'android'
 
   // Генерировать напоминания из лекарств
   generateFromMedicines: (medicines: Medicine[]) => void
@@ -29,12 +31,22 @@ interface RemindersStore {
 
   // Обновить активное напоминание
   setActiveReminder: (reminder: Reminder | null) => void
+
+  // Установить платформу
+  setPlatform: (platform: 'web' | 'android') => void
+
+  // Синхронизировать напоминания для лекарства (web + native)
+  syncReminderForMedicine: (medicine: Medicine) => Promise<void>
+
+  // Отменить все напоминания для лекарства
+  removeMedicineReminders: (medicineId: string) => Promise<void>
 }
 
 export const useRemindersStore = create<RemindersStore>((set, get) => ({
   reminders: [],
   activeReminder: null,
   lastCheckTime: 0,
+  platform: 'web',
 
   generateFromMedicines: (medicines) => {
     const generated = generateRemindersForDay(medicines)
@@ -119,6 +131,28 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
 
   setActiveReminder: (reminder) => {
     set({ activeReminder: reminder })
+  },
+
+  setPlatform: (platform) => {
+    set({ platform })
+  },
+
+  syncReminderForMedicine: async (medicine) => {
+    // Синхронизировать напоминания (web + native)
+    await scheduleReminderForMedicine(medicine)
+  },
+
+  removeMedicineReminders: async (medicineId) => {
+    // Отменить все напоминания (web + native)
+    await cancelRemindersForMedicine(medicineId)
+    // Также удалить из локального списка
+    set((state) => ({
+      reminders: state.reminders.filter((r) => r.medicineId !== medicineId),
+      activeReminder:
+        state.activeReminder?.medicineId === medicineId
+          ? null
+          : state.activeReminder,
+    }))
   },
 }))
 

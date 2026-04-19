@@ -33,3 +33,20 @@ coverage/
 # Misc
 .cache/
 dist/
+
+# Capacitor
+capacitor.config.json
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/build/
+android/app/build/
+android/captures/
+android/.DS_Store
+
+# Gradle
+.gradle/
+build/
+gradle.properties

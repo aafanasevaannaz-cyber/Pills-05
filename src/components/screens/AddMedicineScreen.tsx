@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
 import { useAddMedicineUI } from '@/features/medicines/uiStore'
 import { useMedicinesStore } from '@/features/medicines/store'
+import { useRemindersStore } from '@/features/reminders/store'
 import { useRouter } from 'next/navigation'
 
 export const AddMedicineScreen: React.FC = () => {
@@ -114,6 +115,10 @@ export const AddMedicineScreen: React.FC = () => {
 
     addMedicine(newMedicine)
     saveToDB()
+
+    // Синхронизировать напоминания (web + Android)
+    syncReminderForMedicine(newMedicine)
+
     setMessage('✓ Лекарство сохранено')
     setTimeout(() => {
       reset()

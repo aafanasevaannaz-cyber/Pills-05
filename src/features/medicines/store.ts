@@ -7,6 +7,9 @@ interface MedicinesStore {
   removeMedicine: (id: string) => void
   updateMedicine: (id: string, updates: Partial<Medicine>) => void
   getMedicine: (id: string) => Medicine | null
+  findByName: (name: string) => Medicine | null
+  saveToDB: () => void
+  loadFromDB: () => void
 }
 
 export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
@@ -32,5 +35,29 @@ export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
   getMedicine: (id) => {
     const state = get()
     return state.medicines.find((m) => m.id === id) || null
+  },
+
+  findByName: (name) => {
+    const state = get()
+    const normalized = name.toLowerCase().trim()
+    return state.medicines.find((m) =>
+      m.name.toLowerCase().includes(normalized)
+    ) || null
+  },
+
+  saveToDB: () => {
+    const state = get()
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('medicines', JSON.stringify(state.medicines))
+    }
+  },
+
+  loadFromDB: () => {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem('medicines')
+      if (data) {
+        set({ medicines: JSON.parse(data) })
+      }
+    }
   },
 }))

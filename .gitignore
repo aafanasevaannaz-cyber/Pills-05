@@ -50,3 +50,4 @@ android/.DS_Store
 .gradle/
 build/
 gradle.properties
+tsconfig.tsbuildinfo

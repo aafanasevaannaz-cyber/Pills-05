@@ -176,9 +176,11 @@ jobs:
         id: qa
         if: steps.emulator.outcome == 'success'
         continue-on-error: true
-        env:
-          PATH: ${{ env.ANDROID_HOME }}/platform-tools:${{ env.ANDROID_HOME }}/emulator:${{ env.PATH }}
         run: |
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
+          command -v adb
+          command -v bash
+          command -v python3
           chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
           bash qa/android/run_device_qa.sh \
             '${{ matrix.profile_name }}' \

@@ -4,6 +4,6 @@ export interface Reminder {
   scheduledTime: Date
   status: 'pending' | 'shown' | 'taken' | 'skipped'
   attempts: number
-  nextRetryTime?: Date
+  nextRetryTime?: Date | null
   createdAt: Date
 }

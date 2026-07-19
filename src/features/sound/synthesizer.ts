@@ -25,14 +25,14 @@ export const speakText = async (text: string, lang: string = 'ru-RU'): Promise<v
 
     return new Promise((resolve, reject) => {
       utterance.onend = () => resolve()
-      utterance.onerror = () => {
-        handleVoiceError(utterance.error || 'Unknown error')
-        reject()
+      utterance.onerror = (event) => {
+        handleVoiceError(event.error || 'Unknown error')
+        reject(new Error(event.error || 'Speech synthesis failed'))
       }
       synth.speak(utterance)
     })
-  } catch (e) {
-    handleVoiceError(e)
+  } catch (error) {
+    handleVoiceError(error)
   }
 }
 
@@ -40,8 +40,8 @@ export const stopSpeaking = (): void => {
   try {
     if (typeof window === 'undefined') return
     window.speechSynthesis?.cancel()
-  } catch (e) {
-    handleVoiceError(e)
+  } catch (error) {
+    handleVoiceError(error)
   }
 }
 
@@ -50,6 +50,6 @@ export const isSpeakingSupported = (): boolean => {
   return !!window.speechSynthesis
 }
 
-export const getMedicineReminder = (medicineName: string): string => {
+export const getMedicineReminder = (_medicineName: string): string => {
   return 'Время принимать таблетки'
 }

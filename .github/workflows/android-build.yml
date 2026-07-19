@@ -1,0 +1,84 @@
+name: Android build
+
+on:
+  push:
+    branches:
+      - fix/android-ready-20260719-code-final
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run type-check
+
+      - name: Build static web app and sync Android
+        run: npm run android:sync
+
+      - name: Build debug APK
+        id: gradle
+        continue-on-error: true
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon > ../gradle-build.log 2>&1
+
+      - name: Publish Gradle diagnostic
+        if: steps.gradle.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr view 1 --json body --jq .body > current-body.md
+          sed '/<!-- BUILD-DIAGNOSTIC -->/,$d' current-body.md > pr-body.md
+          {
+            echo
+            echo '<!-- BUILD-DIAGNOSTIC -->'
+            echo '### Последняя ошибка Android-сборки'
+            echo '```text'
+            tail -n 60 gradle-build.log
+            echo '```'
+          } >> pr-body.md
+          gh pr edit 1 --body-file pr-body.md
+          tail -n 60 gradle-build.log
+          exit 1
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-05-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

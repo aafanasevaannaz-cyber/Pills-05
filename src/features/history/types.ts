@@ -1,1 +1,1 @@
-export { HistoryEntry } from '@/types'
+export type { HistoryEntry } from '@/types'

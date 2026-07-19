@@ -1,16 +1,16 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+/// <reference types="@capacitor/local-notifications" />
+
+import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.pills.reminder',
   appName: 'Pills-05',
-  webDir: '.next',
+  webDir: 'out',
   plugins: {
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
       iconColor: '#488AFF',
-      sound: 'beep',
     },
   },
-};
+}
 
-export default config;
+export default config

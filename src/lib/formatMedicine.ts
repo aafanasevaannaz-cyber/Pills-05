@@ -25,7 +25,7 @@ const frequencyLabels: Record<Medicine['frequency'], string> = {
 
 export function formatDosage(value: string): string {
   const normalized = value.trim()
-  return dosageLabels[normalized] ?? normalized.replaceAll('_', ' ')
+  return dosageLabels[normalized] ?? normalized.replace(/_/g, ' ')
 }
 
 export function formatFrequency(value: Medicine['frequency']): string {

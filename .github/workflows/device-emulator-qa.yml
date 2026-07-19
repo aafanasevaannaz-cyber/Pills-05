@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/device-emulator-qa.yml'
       - 'scripts/android_qa.py'
+      - 'scripts/android_qa_compat.py'
       - 'src/**'
       - 'android/**'
       - 'package.json'
@@ -18,6 +19,7 @@ on:
     paths:
       - '.github/workflows/device-emulator-qa.yml'
       - 'scripts/android_qa.py'
+      - 'scripts/android_qa_compat.py'
       - 'src/**'
       - 'android/**'
       - 'package.json'
@@ -135,7 +137,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: >-
-            python3 scripts/android_qa.py
+            python3 scripts/android_qa_compat.py
             --model '${{ matrix.model }}'
             --width '${{ matrix.width }}'
             --height '${{ matrix.height }}'

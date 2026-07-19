@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
-import { Medicine } from '@/types'
+import type { Medicine } from '@/types'
+import { formatDosage } from '@/lib/formatMedicine'
 import {
   addToCache,
   generateNotificationId,
@@ -8,8 +9,7 @@ import {
   removeFromCache,
 } from './notificationIds.logic'
 
-export const isNativeNotificationsAvailable = (): boolean =>
-  Capacitor.isNativePlatform()
+export const isNativeNotificationsAvailable = (): boolean => Capacitor.isNativePlatform()
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return false
@@ -17,7 +17,6 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   try {
     const current = await LocalNotifications.checkPermissions()
     if (current.display === 'granted') return true
-
     const result = await LocalNotifications.requestPermissions()
     return result.display === 'granted'
   } catch (error) {
@@ -25,6 +24,17 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
     return false
   }
 }
+
+const notificationBody = (medicine: Medicine) =>
+  `${medicine.name}. Дозировка: ${formatDosage(medicine.dosage)}`
+
+const notificationBase = (medicine: Medicine, time: string) => ({
+  title: 'Пора принять лекарство',
+  body: notificationBody(medicine),
+  sound: '',
+  extra: { medicineId: medicine.id, time },
+  autoCancel: true,
+})
 
 const scheduleDailyNotification = async (
   medicine: Medicine,
@@ -34,18 +44,12 @@ const scheduleDailyNotification = async (
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null
 
   const notificationId = generateNotificationId(medicine.id, time)
-
   await LocalNotifications.schedule({
     notifications: [
       {
         id: notificationId,
-        title: 'Пора принять лекарство',
-        body: `${medicine.name} (${medicine.dosage})`,
-        schedule: {
-          on: { hour, minute },
-          allowWhileIdle: true,
-        },
-        extra: { medicineId: medicine.id, time },
+        ...notificationBase(medicine, time),
+        schedule: { on: { hour, minute }, allowWhileIdle: true },
       },
     ],
   })
@@ -69,13 +73,8 @@ const scheduleOneTimeNotification = async (
     notifications: [
       {
         id: notificationId,
-        title: 'Пора принять лекарство',
-        body: `${medicine.name} (${medicine.dosage})`,
-        schedule: {
-          at: scheduledTime,
-          allowWhileIdle: true,
-        },
-        extra: { medicineId: medicine.id, time },
+        ...notificationBase(medicine, time),
+        schedule: { at: scheduledTime, allowWhileIdle: true },
       },
     ],
   })
@@ -84,9 +83,29 @@ const scheduleOneTimeNotification = async (
   return notificationId
 }
 
+export const scheduleTestNotification = async (): Promise<boolean> => {
+  if (!isNativeNotificationsAvailable()) return false
+  const hasPermission = await requestNotificationPermission()
+  if (!hasPermission) return false
+
+  await LocalNotifications.schedule({
+    notifications: [
+      {
+        id: Math.floor(Date.now() % 2_000_000_000),
+        title: 'Проверка напоминания',
+        body: 'Звук и уведомления работают',
+        sound: '',
+        autoCancel: true,
+        schedule: { at: new Date(Date.now() + 2500), allowWhileIdle: true },
+        extra: { test: true },
+      },
+    ],
+  })
+  return true
+}
+
 export const cancelNotification = async (notificationId: number): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
-
   try {
     await LocalNotifications.cancel({ notifications: [{ id: notificationId }] })
     removeFromCache(notificationId)
@@ -95,9 +114,7 @@ export const cancelNotification = async (notificationId: number): Promise<void> 
   }
 }
 
-export const cancelAllNotificationsForMedicine = async (
-  medicineId: string
-): Promise<void> => {
+export const cancelAllNotificationsForMedicine = async (medicineId: string): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
 
   try {
@@ -105,14 +122,11 @@ export const cancelAllNotificationsForMedicine = async (
     const pendingIds = pending.notifications
       .filter((notification) => notification.extra?.medicineId === medicineId)
       .map((notification) => notification.id)
-
     const cachedIds = getCachedNotifications(medicineId)
     const ids = Array.from(new Set([...pendingIds, ...cachedIds]))
 
     if (ids.length > 0) {
-      await LocalNotifications.cancel({
-        notifications: ids.map((id) => ({ id })),
-      })
+      await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) })
       ids.forEach(removeFromCache)
     }
   } catch (error) {
@@ -122,14 +136,11 @@ export const cancelAllNotificationsForMedicine = async (
 
 export const cancelAllNotifications = async (): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
-
   try {
     const pending = await LocalNotifications.getPending()
     if (pending.notifications.length > 0) {
       await LocalNotifications.cancel({
-        notifications: pending.notifications.map((notification) => ({
-          id: notification.id,
-        })),
+        notifications: pending.notifications.map((notification) => ({ id: notification.id })),
       })
     }
   } catch (error) {
@@ -146,7 +157,6 @@ const getTimesForScheduleType = (scheduleType: string): string[] => {
     twice: ['08:00', '20:00'],
     three_times: ['08:00', '14:00', '20:00'],
   }
-
   return times[scheduleType] || []
 }
 
@@ -161,29 +171,22 @@ const getEveryOtherOccurrences = (
 
   const candidate = new Date()
   candidate.setHours(hour, minute, 0, 0)
-
-  while (candidate.getTime() <= Date.now()) {
-    candidate.setDate(candidate.getDate() + 1)
-  }
+  while (candidate.getTime() <= Date.now()) candidate.setDate(candidate.getDate() + 1)
 
   const candidateDay = new Date(candidate)
   candidateDay.setHours(0, 0, 0, 0)
   const daysSinceCreation = Math.floor(
     (candidateDay.getTime() - created.getTime()) / (24 * 60 * 60 * 1000)
   )
-  if (Math.abs(daysSinceCreation) % 2 !== 0) {
-    candidate.setDate(candidate.getDate() + 1)
-  }
+  if (Math.abs(daysSinceCreation) % 2 !== 0) candidate.setDate(candidate.getDate() + 1)
 
   const occurrences: Date[] = []
   const endDate = medicine.endDate ? new Date(medicine.endDate) : null
-
   for (let index = 0; index < count; index += 1) {
     if (endDate && candidate > endDate) break
     occurrences.push(new Date(candidate))
     candidate.setDate(candidate.getDate() + 2)
   }
-
   return occurrences
 }
 
@@ -195,14 +198,11 @@ export const scheduleNotificationsForMedicine = async (
 
   const hasPermission = await requestNotificationPermission()
   if (!hasPermission) return []
-
   await cancelAllNotificationsForMedicine(medicine.id)
 
-  const times =
-    medicine.customTimes && medicine.customTimes.length > 0
-      ? medicine.customTimes
-      : getTimesForScheduleType(medicine.scheduleType)
-
+  const times = medicine.customTimes && medicine.customTimes.length > 0
+    ? medicine.customTimes
+    : getTimesForScheduleType(medicine.scheduleType)
   const ids: number[] = []
 
   for (const time of times) {

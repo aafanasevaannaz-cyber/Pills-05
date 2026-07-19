@@ -70,10 +70,30 @@ jobs:
         run: npm run android:sync
 
       - name: Build debug APK
+        id: gradle
+        continue-on-error: true
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon > ../gradle-build.log 2>&1
+
+      - name: Report Gradle errors
+        if: steps.gradle.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Gradle build errors:"
+          tail -n 180 gradle-build.log
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            {
+              echo '### Gradle build errors'
+              echo '```text'
+              tail -n 180 gradle-build.log
+              echo '```'
+            } > gradle-comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file gradle-comment.md
+          fi
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -30,10 +30,14 @@ export default function Home() {
 
       if (platform === 'android') {
         if (useSettingsStore.getState().pushNotificationsEnabled) {
-          await Promise.allSettled(
-            medicines.map((medicine) =>
-              useRemindersStore.getState().syncReminderForMedicine(medicine)
-            )
+          await Promise.all(
+            medicines.map(async (medicine) => {
+              try {
+                await useRemindersStore.getState().syncReminderForMedicine(medicine)
+              } catch (error) {
+                console.error(`Reminder sync failed for ${medicine.name}:`, error)
+              }
+            })
           )
         }
 

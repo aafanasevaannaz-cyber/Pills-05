@@ -44,24 +44,7 @@ jobs:
         run: npm install
 
       - name: Typecheck
-        id: typecheck
-        continue-on-error: true
-        run: npm run type-check > typecheck.log 2>&1
-
-      - name: Report typecheck errors
-        if: steps.typecheck.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat typecheck.log
-          {
-            echo '### TypeScript errors'
-            echo '```text'
-            tail -n 60 typecheck.log
-            echo '```'
-          } > typecheck-comment.md
-          gh pr comment 1 --body-file typecheck-comment.md
-          exit 1
+        run: npm run type-check
 
       - name: Build static web app and sync Android
         run: npm run android:sync
@@ -74,19 +57,23 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon > ../gradle-build.log 2>&1
 
-      - name: Report Gradle errors
+      - name: Publish Gradle diagnostic
         if: steps.gradle.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tail -n 60 gradle-build.log
+          gh pr view 1 --json body --jq .body > current-body.md
+          sed '/<!-- BUILD-DIAGNOSTIC -->/,$d' current-body.md > pr-body.md
           {
-            echo '### Gradle build errors'
+            echo
+            echo '<!-- BUILD-DIAGNOSTIC -->'
+            echo '### Последняя ошибка Android-сборки'
             echo '```text'
             tail -n 60 gradle-build.log
             echo '```'
-          } > gradle-comment.md
-          gh pr comment 1 --body-file gradle-comment.md
+          } >> pr-body.md
+          gh pr edit 1 --body-file pr-body.md
+          tail -n 60 gradle-build.log
           exit 1
 
       - name: Upload APK

@@ -8,9 +8,10 @@
     "build": "next build",
     "start": "next start",
     "type-check": "tsc --noEmit",
-    "android:sync": "cap sync android",
+    "check": "npm run type-check && npm run build",
+    "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
-    "android:build": "cd android && ./gradlew assembleDebug"
+    "android:build": "npm run android:sync && cd android && ./gradlew assembleDebug"
   },
   "repository": {
     "type": "git",

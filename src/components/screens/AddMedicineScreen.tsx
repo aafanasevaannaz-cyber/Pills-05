@@ -7,7 +7,10 @@ import { Card } from '@/components/ui/Card'
 import { useAddMedicineUI } from '@/features/medicines/uiStore'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useRemindersStore } from '@/features/reminders/store'
+import { Medicine } from '@/types'
 import { useRouter } from 'next/navigation'
+
+const isValidTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 
 export const AddMedicineScreen: React.FC = () => {
   const router = useRouter()
@@ -31,60 +34,51 @@ export const AddMedicineScreen: React.FC = () => {
     reset,
   } = useAddMedicineUI()
 
-  const { medicines, addMedicine, findByName, saveToDB } = useMedicinesStore()
+  const { medicines, addMedicine, findByName } = useMedicinesStore()
+  const syncReminderForMedicine = useRemindersStore(
+    (state) => state.syncReminderForMedicine
+  )
 
   useEffect(() => {
-    return () => {
-      reset()
-    }
-  }, [])
+    return () => reset()
+  }, [reset])
 
   const duplicate = name.length > 0 ? findByName(name) : null
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
+  const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value
     setName(value)
-    if (value.length >= 1) {
-      const found = medicines.find((m) =>
-        m.name.toLowerCase().includes(value.toLowerCase())
-      )
-      if (found) {
-        setShowDuplicate(true)
-      } else {
-        setShowDuplicate(false)
-      }
-    } else {
-      setShowDuplicate(false)
-    }
+    const found =
+      value.length > 0
+        ? medicines.find((medicine) =>
+            medicine.name.toLowerCase().includes(value.toLowerCase())
+          )
+        : undefined
+    setShowDuplicate(Boolean(found))
   }
 
-  const handleFrequencySelect = (freq: string) => {
-    setFrequency(freq)
+  const handleFrequencySelect = (value: string) => {
+    setFrequency(value)
     setMessage('')
   }
 
-  const handleScheduleTypeSelect = (type: string) => {
-    setScheduleType(type)
+  const handleScheduleTypeSelect = (value: string) => {
+    setScheduleType(value)
     setMessage('')
   }
 
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, '')
-    if (value.length >= 2) {
-      value = value.slice(0, 4)
-      const hours = value.slice(0, 2)
-      const minutes = value.slice(2, 4)
-      value = `${hours}:${minutes}`
-    }
+  const handleTimeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    let value = event.target.value.replace(/\D/g, '').slice(0, 4)
+    if (value.length > 2) value = `${value.slice(0, 2)}:${value.slice(2)}`
     setCustomTime(value)
   }
 
-  const handleDosageSelect = (dos: string) => {
-    setDosage(dos)
+  const handleDosageSelect = (value: string) => {
+    setDosage(value)
     setMessage('')
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       setMessage('⚠ Введите название лекарства')
       return
@@ -93,8 +87,12 @@ export const AddMedicineScreen: React.FC = () => {
       setMessage('⚠ Выберите частоту приёма')
       return
     }
-    if (!scheduleType) {
+    if (!scheduleType && !['morning', 'twice', 'three_times'].includes(frequency)) {
       setMessage('⚠ Выберите время')
+      return
+    }
+    if (scheduleType === 'custom' && !isValidTime(customTime)) {
+      setMessage('⚠ Введите корректное время, например 08:00')
       return
     }
     if (!dosage) {
@@ -102,28 +100,41 @@ export const AddMedicineScreen: React.FC = () => {
       return
     }
 
-    const newMedicine = {
+    const normalizedFrequency: Medicine['frequency'] =
+      frequency === 'every_other' || frequency === 'as_needed'
+        ? frequency
+        : 'daily'
+
+    const shortcutSchedule = ['morning', 'twice', 'three_times'].includes(frequency)
+      ? frequency
+      : scheduleType
+
+    const normalizedScheduleType = shortcutSchedule as Medicine['scheduleType']
+
+    const newMedicine: Medicine = {
       id: Date.now().toString(),
       name: name.trim(),
       dosage,
-      frequency: frequency as 'daily' | 'every_other' | 'as_needed',
-      scheduleType: scheduleType as any,
+      frequency: normalizedFrequency,
+      scheduleType: normalizedScheduleType,
       customTimes:
-        scheduleType === 'custom' ? [customTime] : undefined,
+        normalizedScheduleType === 'custom' ? [customTime] : undefined,
       createdAt: new Date(),
     }
 
     addMedicine(newMedicine)
-    saveToDB()
 
-    // Синхронизировать напоминания (web + Android)
-    syncReminderForMedicine(newMedicine)
-
-    setMessage('✓ Лекарство сохранено')
-    setTimeout(() => {
-      reset()
-      router.push('/')
-    }, 1500)
+    try {
+      await syncReminderForMedicine(newMedicine)
+      setMessage('✓ Лекарство сохранено')
+      setTimeout(() => {
+        reset()
+        router.push('/')
+      }, 800)
+    } catch (error) {
+      console.error('Reminder scheduling failed:', error)
+      setMessage('✓ Лекарство сохранено. Проверьте разрешение на уведомления')
+    }
   }
 
   return (
@@ -134,7 +145,6 @@ export const AddMedicineScreen: React.FC = () => {
 
       <h1 className="text-2xl font-bold mb-6">Добавить лекарство</h1>
 
-      {/* ШАГ 1: Название */}
       {step === 1 && (
         <>
           <Input
@@ -179,7 +189,6 @@ export const AddMedicineScreen: React.FC = () => {
         </>
       )}
 
-      {/* ШАГ 2: Частота */}
       {step === 2 && (
         <>
           <p className="text-gray-600 mb-4">Выберите частоту приёма:</p>
@@ -222,7 +231,6 @@ export const AddMedicineScreen: React.FC = () => {
         </>
       )}
 
-      {/* ШАГ 3: Время */}
       {step === 3 && (
         <>
           <p className="text-gray-600 mb-4">Выберите время приёма:</p>
@@ -282,7 +290,6 @@ export const AddMedicineScreen: React.FC = () => {
         </>
       )}
 
-      {/* ШАГ 4: Дозировка */}
       {step === 4 && (
         <>
           <p className="text-gray-600 mb-4">Выберите дозировку:</p>
@@ -303,12 +310,6 @@ export const AddMedicineScreen: React.FC = () => {
               </Button>
             ))}
           </div>
-
-          {message && (
-            <Card className="mb-4 bg-yellow-50 border-yellow-200">
-              <p className="text-yellow-900 text-sm">{message}</p>
-            </Card>
-          )}
 
           <div className="flex gap-2">
             <Button

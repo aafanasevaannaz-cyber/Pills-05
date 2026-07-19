@@ -1,24 +1,23 @@
 import { handleVoiceError } from '@/lib/errorHandler'
 
-export const speakText = async (text: string, lang: string = 'ru-RU'): Promise<void> => {
+export const speakText = async (text: string, lang = 'ru-RU'): Promise<void> => {
   if (typeof window === 'undefined') return
 
   try {
     const synth = window.speechSynthesis
-
-    if (!synth) {
-      throw new Error('Web Speech API not available')
-    }
-
-    if (synth.speaking) {
-      synth.cancel()
-    }
+    if (!synth) throw new Error('Speech synthesis is unavailable')
+    synth.cancel()
 
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = lang
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
-    utterance.volume = 1.0
+    utterance.rate = 0.88
+    utterance.pitch = 1
+    utterance.volume = 1
+
+    const russianVoice = synth
+      .getVoices()
+      .find((voice) => voice.lang.toLowerCase().startsWith('ru'))
+    if (russianVoice) utterance.voice = russianVoice
 
     return new Promise((resolve, reject) => {
       utterance.onend = () => resolve()
@@ -35,18 +34,16 @@ export const speakText = async (text: string, lang: string = 'ru-RU'): Promise<v
 
 export const stopSpeaking = (): void => {
   try {
-    if (typeof window === 'undefined') return
-    window.speechSynthesis?.cancel()
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
   } catch (error) {
     handleVoiceError(error)
   }
 }
 
-export const isSpeakingSupported = (): boolean => {
-  if (typeof window === 'undefined') return false
-  return Boolean(window.speechSynthesis)
-}
+export const isSpeakingSupported = (): boolean =>
+  typeof window !== 'undefined' && Boolean(window.speechSynthesis)
 
-export const getMedicineReminder = (_medicineName: string): string => {
-  return 'Время принимать таблетки'
-}
+export const getMedicineReminder = (medicineName: string, dosage?: string): string =>
+  dosage
+    ? `Пора принять лекарство ${medicineName}. Дозировка: ${dosage}.`
+    : `Пора принять лекарство ${medicineName}.`

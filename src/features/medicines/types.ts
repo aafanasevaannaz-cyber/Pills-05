@@ -1,1 +1,1 @@
-export { Medicine } from '@/types'
+export type { Medicine } from '@/types'

@@ -12,52 +12,77 @@ interface MedicinesStore {
   loadFromDB: () => void
 }
 
+const persistMedicines = (medicines: Medicine[]) => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem('medicines', JSON.stringify(medicines))
+}
+
+const reviveMedicine = (medicine: Medicine): Medicine => ({
+  ...medicine,
+  createdAt: new Date(medicine.createdAt),
+  endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
+})
+
 export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
   medicines: [],
 
   addMedicine: (medicine) =>
-    set((state) => ({
-      medicines: [...state.medicines, medicine],
-    })),
+    set((state) => {
+      const medicines = [...state.medicines, reviveMedicine(medicine)]
+      persistMedicines(medicines)
+      return { medicines }
+    }),
 
   removeMedicine: (id) =>
-    set((state) => ({
-      medicines: state.medicines.filter((m) => m.id !== id),
-    })),
+    set((state) => {
+      const medicines = state.medicines.filter((medicine) => medicine.id !== id)
+      persistMedicines(medicines)
+      return { medicines }
+    }),
 
   updateMedicine: (id, updates) =>
-    set((state) => ({
-      medicines: state.medicines.map((m) =>
-        m.id === id ? { ...m, ...updates } : m
-      ),
-    })),
+    set((state) => {
+      const medicines = state.medicines.map((medicine) =>
+        medicine.id === id ? reviveMedicine({ ...medicine, ...updates }) : medicine
+      )
+      persistMedicines(medicines)
+      return { medicines }
+    }),
 
-  getMedicine: (id) => {
-    const state = get()
-    return state.medicines.find((m) => m.id === id) || null
-  },
+  getMedicine: (id) => get().medicines.find((medicine) => medicine.id === id) || null,
 
   findByName: (name) => {
-    const state = get()
     const normalized = name.toLowerCase().trim()
-    return state.medicines.find((m) =>
-      m.name.toLowerCase().includes(normalized)
-    ) || null
+    if (!normalized) return null
+    return (
+      get().medicines.find((medicine) =>
+        medicine.name.toLowerCase().includes(normalized)
+      ) || null
+    )
   },
 
-  saveToDB: () => {
-    const state = get()
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('medicines', JSON.stringify(state.medicines))
-    }
-  },
+  saveToDB: () => persistMedicines(get().medicines),
 
   loadFromDB: () => {
-    if (typeof window !== 'undefined') {
+    if (typeof window === 'undefined') return
+
+    try {
       const data = localStorage.getItem('medicines')
-      if (data) {
-        set({ medicines: JSON.parse(data) })
+      if (!data) {
+        set({ medicines: [] })
+        return
       }
+
+      const parsed = JSON.parse(data)
+      if (!Array.isArray(parsed)) {
+        set({ medicines: [] })
+        return
+      }
+
+      set({ medicines: parsed.map(reviveMedicine) })
+    } catch (error) {
+      console.error('Medicine load error:', error)
+      set({ medicines: [] })
     }
   },
 }))

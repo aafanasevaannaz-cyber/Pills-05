@@ -1,0 +1,94 @@
+name: Android verification
+
+on:
+  push:
+    branches:
+      - fix/android-ready-20260719-working
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        shell: bash
+        run: |
+          set +e
+          npm run type-check > typecheck.log 2>&1
+          status=$?
+          cat typecheck.log
+          exit $status
+
+      - name: Upload TypeScript diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-05-typecheck-log
+          path: typecheck.log
+          if-no-files-found: ignore
+
+      - name: Export web application
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        shell: bash
+        run: |
+          set +e
+          npx cap sync android > capacitor-sync.log 2>&1
+          status=$?
+          cat capacitor-sync.log
+          exit $status
+
+      - name: Upload Capacitor diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-05-capacitor-log
+          path: capacitor-sync.log
+          if-no-files-found: ignore
+
+      - name: Build debug APK
+        working-directory: android
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew assembleDebug > ../gradle-build.log 2>&1
+          status=$?
+          tail -n 120 ../gradle-build.log
+          exit $status
+
+      - name: Upload Gradle diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-05-gradle-log
+          path: gradle-build.log
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-05-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

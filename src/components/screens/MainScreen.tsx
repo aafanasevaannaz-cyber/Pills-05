@@ -11,25 +11,20 @@ import { startScheduler, stopScheduler } from '@/features/reminders/scheduler'
 import Link from 'next/link'
 
 export const MainScreen: React.FC = () => {
-  const medicines = useMedicinesStore((s) => s.medicines)
-  const history = useHistoryStore((s) => s.history)
-  const activeReminder = useRemindersStore((s) => s.activeReminder)
-  const markTaken = useRemindersStore((s) => s.markTaken)
-  const markSkipped = useRemindersStore((s) => s.markSkipped)
-  const delayReminder = useRemindersStore((s) => s.delayReminder)
-
-  const addEntry = useHistoryStore((s) => s.addEntry)
-  const saveToDB = useHistoryStore((s) => s.saveToDB)
-
+  const medicines = useMedicinesStore((state) => state.medicines)
+  const history = useHistoryStore((state) => state.history)
+  const activeReminder = useRemindersStore((state) => state.activeReminder)
+  const markTaken = useRemindersStore((state) => state.markTaken)
+  const markSkipped = useRemindersStore((state) => state.markSkipped)
+  const delayReminder = useRemindersStore((state) => state.delayReminder)
+  const addEntry = useHistoryStore((state) => state.addEntry)
   const [actionMessage, setActionMessage] = useState('')
 
-  // Запуск scheduler при загрузке
   useEffect(() => {
     startScheduler()
     return () => stopScheduler()
   }, [])
 
-  // Проверка напоминаний каждые 10 секунд
   useEffect(() => {
     const interval = setInterval(() => {
       useRemindersStore.getState().checkReminders()
@@ -37,58 +32,63 @@ export const MainScreen: React.FC = () => {
     return () => clearInterval(interval)
   }, [])
 
-  const getMedicineById = (medicineId: string) => {
-    return medicines.find((m) => m.id === medicineId)
+  const getMedicineById = (medicineId: string) =>
+    medicines.find((medicine) => medicine.id === medicineId)
+
+  const addHistoryEntry = (
+    status: 'taken' | 'skipped' | 'late',
+    reminder = activeReminder
+  ) => {
+    if (!reminder) return
+
+    addEntry({
+      id: `${Date.now()}-${status}`,
+      medicineId: reminder.medicineId,
+      takenAt: new Date(),
+      scheduledFor: new Date(reminder.scheduledTime),
+      status,
+    })
   }
 
-  const handleTaken = (medicineId?: string) => {
-    if (activeReminder) {
-      markTaken(activeReminder.id)
+  const handleTaken = () => {
+    if (!activeReminder) return
 
-      const medicine = getMedicineById(activeReminder.medicineId)
-      const entry = {
-        id: Date.now().toString(),
-        medicineId: activeReminder.medicineId,
-        takenAt: new Date(),
-        scheduledFor: new Date(activeReminder.scheduledTime),
-        status: 'taken' as const,
-      }
-      addEntry(entry)
-      saveToDB()
-
-      setActionMessage(`✓ ${medicine?.name || 'Лекарство'} принято`)
-      setTimeout(() => setActionMessage(''), 2000)
-    }
+    const medicine = getMedicineById(activeReminder.medicineId)
+    addHistoryEntry('taken')
+    markTaken(activeReminder.id)
+    setActionMessage(`✓ ${medicine?.name || 'Лекарство'} принято`)
+    setTimeout(() => setActionMessage(''), 2000)
   }
 
   const handleSkipped = () => {
-    if (activeReminder) {
-      markSkipped(activeReminder.id)
-      const medicine = getMedicineById(activeReminder.medicineId)
-      setActionMessage(`${medicine?.name || 'Лекарство'} пропущено`)
-      setTimeout(() => setActionMessage(''), 2000)
-    }
+    if (!activeReminder) return
+
+    const medicine = getMedicineById(activeReminder.medicineId)
+    addHistoryEntry('skipped')
+    markSkipped(activeReminder.id)
+    setActionMessage(`${medicine?.name || 'Лекарство'} пропущено`)
+    setTimeout(() => setActionMessage(''), 2000)
   }
 
   const handleDelay = () => {
-    if (activeReminder) {
-      delayReminder(activeReminder.id)
-      setActionMessage('Напомним через 10 минут')
-      setTimeout(() => setActionMessage(''), 2000)
-    }
+    if (!activeReminder) return
+
+    addHistoryEntry('late')
+    delayReminder(activeReminder.id)
+    setActionMessage('Напомним через 10 минут')
+    setTimeout(() => setActionMessage(''), 2000)
   }
 
-  const lastEntry = history.length > 0 ? history[history.length - 1] : null
+  const takenHistory = history.filter((entry) => entry.status === 'taken')
+  const lastEntry = takenHistory.length > 0 ? takenHistory[takenHistory.length - 1] : null
 
   return (
     <>
       <PermissionReminder />
       <div className="md:grid md:grid-cols-2 md:gap-6 md:max-w-6xl md:mx-auto p-4 pb-20">
-        {/* Левая колонка: список лекарств */}
         <div className="md:col-span-1 order-2 md:order-1">
           <h2 className="text-2xl font-bold mb-4 hidden md:block">Список лекарств</h2>
 
-          {/* СПИСОК ЛЕКАРСТВ */}
           {medicines.length === 0 ? (
             <Card>
               <p className="text-gray-600 mb-4">Нет добавленных лекарств</p>
@@ -133,59 +133,58 @@ export const MainScreen: React.FC = () => {
           )}
         </div>
 
-        {/* Правая колонка: активное напоминание и действия */}
         <div className="md:col-span-1 order-1 md:order-2">
           <h1 className="text-3xl font-bold mb-4 md:hidden">Напоминание о лекарствах</h1>
 
-          {/* АКТИВНОЕ НАПОМИНАНИЕ */}
           {activeReminder && (
             <Card className="mb-6 bg-red-50 border-2 border-red-400 animate-pulse">
-          <div className="mb-4 p-3 bg-red-100 rounded text-red-900 text-center font-bold text-lg">
-            🔔 ПОРА ПРИНЯТЬ ЛЕКАРСТВО
-          </div>
-
-          {getMedicineById(activeReminder.medicineId) && (
-            <>
-              <h3 className="text-2xl font-bold mb-3">
-                {getMedicineById(activeReminder.medicineId)?.name}
-              </h3>
-              <p className="text-gray-700 mb-4">
-                Время: {new Date(activeReminder.scheduledTime).toLocaleTimeString('ru-RU', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-              <p className="text-gray-700 mb-6">
-                Дозировка: {getMedicineById(activeReminder.medicineId)?.dosage}
-              </p>
-
-              <div className="flex flex-col gap-3">
-                <Button
-                  variant="primary"
-                  className="w-full text-lg py-4 font-bold"
-                  onClick={() => handleTaken()}
-                >
-                  ✓ Я ПРИНЯЛ
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={handleDelay}
-                >
-                  ⏱ Отложить на 10 мин
-                </Button>
-                <Button
-                  variant="danger"
-                  className="w-full"
-                  onClick={handleSkipped}
-                >
-                  ✗ Пропустил
-                </Button>
+              <div className="mb-4 p-3 bg-red-100 rounded text-red-900 text-center font-bold text-lg">
+                🔔 ПОРА ПРИНЯТЬ ЛЕКАРСТВО
               </div>
-            </>
+
+              {getMedicineById(activeReminder.medicineId) && (
+                <>
+                  <h3 className="text-2xl font-bold mb-3">
+                    {getMedicineById(activeReminder.medicineId)?.name}
+                  </h3>
+                  <p className="text-gray-700 mb-4">
+                    Время:{' '}
+                    {new Date(activeReminder.scheduledTime).toLocaleTimeString('ru-RU', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                  <p className="text-gray-700 mb-6">
+                    Дозировка: {getMedicineById(activeReminder.medicineId)?.dosage}
+                  </p>
+
+                  <div className="flex flex-col gap-3">
+                    <Button
+                      variant="primary"
+                      className="w-full text-lg py-4 font-bold"
+                      onClick={handleTaken}
+                    >
+                      ✓ Я ПРИНЯЛ
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={handleDelay}
+                    >
+                      ⏱ Отложить на 10 мин
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="w-full"
+                      onClick={handleSkipped}
+                    >
+                      ✗ Пропустил
+                    </Button>
+                  </div>
+                </>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
 
           {!activeReminder && (
             <div className="mb-6 p-3 bg-green-50 rounded text-green-900 text-sm">

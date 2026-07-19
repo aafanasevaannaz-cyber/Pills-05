@@ -1,44 +1,46 @@
-import { Medicine } from '@/types'
-import { Reminder } from '@/types'
+import { Medicine, Reminder } from '@/types'
+
+const getDateKey = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 export const generateRemindersForDay = (medicines: Medicine[]): Reminder[] => {
   const reminders: Reminder[] = []
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  const dateKey = getDateKey(today)
 
   medicines.forEach((medicine) => {
-    // Пропускаем, если дата окончания уже прошла
-    if (medicine.endDate && new Date(medicine.endDate) < today) {
-      return
-    }
+    if (medicine.frequency === 'as_needed') return
 
-    // Пропускаем, если каждый второй день и не сегодня
+    if (medicine.endDate && new Date(medicine.endDate) < today) return
+
     if (medicine.frequency === 'every_other') {
+      const created = new Date(medicine.createdAt)
+      created.setHours(0, 0, 0, 0)
       const daysSinceCreation = Math.floor(
-        (today.getTime() - new Date(medicine.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+        (today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
       )
-      if (daysSinceCreation % 2 !== 0) {
-        return
-      }
+      if (daysSinceCreation % 2 !== 0) return
     }
 
-    // Получаем времена приёма
-    let times: string[] = []
+    const times =
+      medicine.customTimes && medicine.customTimes.length > 0
+        ? medicine.customTimes
+        : getTimesForScheduleType(medicine.scheduleType)
 
-    if (medicine.customTimes && medicine.customTimes.length > 0) {
-      times = medicine.customTimes
-    } else {
-      times = getTimesForScheduleType(medicine.scheduleType)
-    }
-
-    // Создаём напоминания для каждого времени
     times.forEach((time) => {
       const [hours, minutes] = time.split(':').map(Number)
+      if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return
+
       const reminderTime = new Date(today)
       reminderTime.setHours(hours, minutes, 0, 0)
 
       reminders.push({
-        id: `${medicine.id}-${time}`,
+        id: `${medicine.id}-${dateKey}-${time}`,
         medicineId: medicine.id,
         scheduledTime: reminderTime,
         status: 'pending',
@@ -66,35 +68,17 @@ function getTimesForScheduleType(scheduleType: string): string[] {
 
 export const shouldShowReminder = (reminder: Reminder): boolean => {
   const now = new Date()
-  const scheduledTime = new Date(reminder.scheduledTime)
-  const timeDiff = now.getTime() - scheduledTime.getTime()
 
-  // Показываем, если время пришло и еще не истекли 5 минут первого напоминания
-  if (timeDiff >= 0 && timeDiff < 5 * 60 * 1000) {
-    return true
-  }
-
-  // Показываем повторения: 5 мин + N*5 мин
-  if (reminder.attempts > 0 && reminder.nextRetryTime) {
+  if (reminder.nextRetryTime) {
     const retryTime = new Date(reminder.nextRetryTime)
     const retryDiff = now.getTime() - retryTime.getTime()
-    if (retryDiff >= 0 && retryDiff < 5 * 60 * 1000) {
-      return true
-    }
+    return retryDiff >= 0 && retryDiff < 5 * 60 * 1000
   }
 
-  return false
+  const scheduledTime = new Date(reminder.scheduledTime)
+  const timeDiff = now.getTime() - scheduledTime.getTime()
+  return timeDiff >= 0 && timeDiff < 5 * 60 * 1000
 }
 
-export const getNextRetryTime = (reminder: Reminder): Date | null => {
-  if (reminder.attempts >= 3) {
-    return null // Больше нет повторений
-  }
-
-  const delayMs = reminder.attempts === 0 ? 5 * 60 * 1000 : 10 * 60 * 1000
-  const nextTime = new Date()
-  nextTime.setTime(nextTime.getTime() + delayMs)
-
-  return nextTime
-}
-
+export const getDelayTime = (minutes = 10): Date =>
+  new Date(Date.now() + minutes * 60 * 1000)

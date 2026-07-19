@@ -1,1 +1,1 @@
-export { Reminder } from '@/types'
+export type { Reminder } from '@/types'

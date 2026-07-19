@@ -1,59 +1,49 @@
 import { App } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
-import { requestNotificationPermission } from '@/features/reminders/nativeNotifications.logic'
 
-export const isCapacitorAvailable = (): boolean => {
-  return typeof window !== 'undefined' && !!(window as any).capacitor
-}
+let initialized = false
+
+export const isCapacitorAvailable = (): boolean => Capacitor.isNativePlatform()
 
 export const initializeCapacitor = async (): Promise<void> => {
-  if (!isCapacitorAvailable()) {
-    console.log('Capacitor not available - running in web mode')
-    return
-  }
+  if (!isCapacitorAvailable() || initialized) return
+
+  initialized = true
 
   try {
-    // Запросить разрешение на уведомления
-    const hasPermission = await requestNotificationPermission()
-    if (hasPermission) {
-      console.log('Notifications permission granted')
-    } else {
-      console.warn('Notifications permission denied or not available')
-    }
-
-    // Подписаться на события приложения
-    App.addListener('appStateChange', ({ isActive }) => {
+    await App.addListener('appStateChange', ({ isActive }) => {
       if (isActive) {
         console.log('App is now active')
-      } else {
-        console.log('App is now inactive')
       }
     })
 
-    // Подписаться на события уведомлений
-    await LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
-      console.log('Notification clicked:', notification)
-    })
+    await LocalNotifications.addListener(
+      'localNotificationActionPerformed',
+      (notification) => {
+        console.log('Notification clicked:', notification)
+      }
+    )
 
-    await LocalNotifications.addListener('localNotificationReceived', (notification) => {
-      console.log('Notification received:', notification)
-    })
-
-    console.log('Capacitor initialized successfully')
-  } catch (e) {
-    console.error('Capacitor initialization failed:', e)
+    await LocalNotifications.addListener(
+      'localNotificationReceived',
+      (notification) => {
+        console.log('Notification received:', notification)
+      }
+    )
+  } catch (error) {
+    initialized = false
+    console.error('Capacitor initialization failed:', error)
   }
 }
 
 export const getPlatformInfo = async (): Promise<string> => {
-  if (!isCapacitorAvailable()) {
-    return 'web'
-  }
+  if (!isCapacitorAvailable()) return 'web'
 
   try {
     const info = await App.getInfo()
-    return `${info.platform} ${info.version}`
-  } catch (e) {
-    return 'unknown'
+    return `${Capacitor.getPlatform()} ${info.version}`
+  } catch {
+    return Capacitor.getPlatform()
   }
 }

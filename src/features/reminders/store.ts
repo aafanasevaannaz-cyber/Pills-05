@@ -1,44 +1,28 @@
 import { create } from 'zustand'
-import { Reminder } from '@/types'
-import { Medicine } from '@/types'
+import { Medicine, Reminder } from '@/types'
 import {
   generateRemindersForDay,
+  getDelayTime,
   shouldShowReminder,
-  getNextRetryTime,
 } from './generator'
-import { scheduleReminderForMedicine, cancelRemindersForMedicine } from './reminder.logic'
+import {
+  cancelRemindersForMedicine,
+  scheduleReminderForMedicine,
+} from './reminder.logic'
 
 interface RemindersStore {
   reminders: Reminder[]
   activeReminder: Reminder | null
   lastCheckTime: number
   platform: 'web' | 'android'
-
-  // Генерировать напоминания из лекарств
   generateFromMedicines: (medicines: Medicine[]) => void
-
-  // Проверить, есть ли напоминания для показа
   checkReminders: () => Reminder | null
-
-  // Отметить как принято
   markTaken: (reminderId: string) => void
-
-  // Отметить как пропущено
   markSkipped: (reminderId: string) => void
-
-  // Отложить на 10 минут
   delayReminder: (reminderId: string) => void
-
-  // Обновить активное напоминание
   setActiveReminder: (reminder: Reminder | null) => void
-
-  // Установить платформу
   setPlatform: (platform: 'web' | 'android') => void
-
-  // Синхронизировать напоминания для лекарства (web + native)
   syncReminderForMedicine: (medicine: Medicine) => Promise<void>
-
-  // Отменить все напоминания для лекарства
   removeMedicineReminders: (medicineId: string) => Promise<void>
 }
 
@@ -50,47 +34,59 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
 
   generateFromMedicines: (medicines) => {
     const generated = generateRemindersForDay(medicines)
-    set({ reminders: generated })
+
+    set((state) => {
+      const existing = new Map(state.reminders.map((reminder) => [reminder.id, reminder]))
+      const reminders = generated.map((reminder) => {
+        const previous = existing.get(reminder.id)
+        if (!previous) return reminder
+
+        return {
+          ...reminder,
+          status: previous.status,
+          attempts: previous.attempts,
+          nextRetryTime: previous.nextRetryTime,
+          createdAt: previous.createdAt,
+        }
+      })
+
+      const activeReminder = state.activeReminder
+        ? reminders.find((reminder) => reminder.id === state.activeReminder?.id) || null
+        : null
+
+      return { reminders, activeReminder }
+    })
   },
 
   checkReminders: () => {
     const state = get()
     const now = Date.now()
 
-    // Проверяем не чаще, чем раз в 30 секунд
-    if (now - state.lastCheckTime < 30 * 1000) {
+    if (now - state.lastCheckTime < 10 * 1000) {
       return state.activeReminder
     }
 
     set({ lastCheckTime: now })
 
-    // Ищем первое напоминание, которое нужно показать
-    for (const reminder of state.reminders) {
-      if (reminder.status !== 'pending') continue
-      if (shouldShowReminder(reminder)) {
-        set({ activeReminder: reminder })
-        return reminder
-      }
-    }
+    const reminder = state.reminders.find(
+      (item) => item.status === 'pending' && shouldShowReminder(item)
+    )
 
-    // Проверяем, нужны ли повторения для существующего напоминания
-    if (state.activeReminder) {
-      const active = state.reminders.find(
-        (r) => r.id === state.activeReminder?.id
-      )
-      if (active && shouldShowReminder(active)) {
-        return active
-      }
-    }
-
-    set({ activeReminder: null })
-    return null
+    set({ activeReminder: reminder || null })
+    return reminder || null
   },
 
   markTaken: (reminderId) => {
     set((state) => ({
-      reminders: state.reminders.map((r) =>
-        r.id === reminderId ? { ...r, status: 'taken' as const, attempts: 0 } : r
+      reminders: state.reminders.map((reminder) =>
+        reminder.id === reminderId
+          ? {
+              ...reminder,
+              status: 'taken' as const,
+              attempts: 0,
+              nextRetryTime: undefined,
+            }
+          : reminder
       ),
       activeReminder: null,
     }))
@@ -98,16 +94,14 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
 
   markSkipped: (reminderId) => {
     set((state) => ({
-      reminders: state.reminders.map((r) =>
-        r.id === reminderId
+      reminders: state.reminders.map((reminder) =>
+        reminder.id === reminderId
           ? {
-              ...r,
+              ...reminder,
               status: 'skipped' as const,
-              attempts: r.attempts + 1,
-              nextRetryTime:
-                r.attempts < 2 ? getNextRetryTime(r) : undefined,
+              nextRetryTime: undefined,
             }
-          : r
+          : reminder
       ),
       activeReminder: null,
     }))
@@ -115,39 +109,34 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
 
   delayReminder: (reminderId) => {
     set((state) => ({
-      reminders: state.reminders.map((r) =>
-        r.id === reminderId
+      reminders: state.reminders.map((reminder) =>
+        reminder.id === reminderId
           ? {
-              ...r,
-              attempts: r.attempts + 1,
-              nextRetryTime:
-                r.attempts < 2 ? getNextRetryTime(r) : undefined,
+              ...reminder,
+              status: 'pending' as const,
+              attempts: reminder.attempts + 1,
+              nextRetryTime: getDelayTime(10),
             }
-          : r
+          : reminder
       ),
       activeReminder: null,
     }))
   },
 
-  setActiveReminder: (reminder) => {
-    set({ activeReminder: reminder })
-  },
+  setActiveReminder: (activeReminder) => set({ activeReminder }),
 
-  setPlatform: (platform) => {
-    set({ platform })
-  },
+  setPlatform: (platform) => set({ platform }),
 
   syncReminderForMedicine: async (medicine) => {
-    // Синхронизировать напоминания (web + native)
     await scheduleReminderForMedicine(medicine)
   },
 
   removeMedicineReminders: async (medicineId) => {
-    // Отменить все напоминания (web + native)
     await cancelRemindersForMedicine(medicineId)
-    // Также удалить из локального списка
     set((state) => ({
-      reminders: state.reminders.filter((r) => r.medicineId !== medicineId),
+      reminders: state.reminders.filter(
+        (reminder) => reminder.medicineId !== medicineId
+      ),
       activeReminder:
         state.activeReminder?.medicineId === medicineId
           ? null
@@ -155,4 +144,3 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
     }))
   },
 }))
-

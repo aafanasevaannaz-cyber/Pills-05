@@ -6,15 +6,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next dev",
     "type-check": "tsc --noEmit",
-    "android:sync": "cap sync android",
+    "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
-    "android:build": "cd android && ./gradlew assembleDebug"
+    "android:build": "npm run android:sync && cd android && ./gradlew assembleDebug --no-daemon"
   },
   "repository": {
     "type": "git",
-    "url": "http://local_proxy@127.0.0.1:24162/git/aafanasevaannaz-cyber/Pills-05"
+    "url": "https://github.com/aafanasevaannaz-cyber/Pills-05.git"
   },
   "keywords": [],
   "author": "",
@@ -22,20 +22,22 @@
   "dependencies": {
     "@capacitor/android": "^8.3.1",
     "@capacitor/app": "^8.1.0",
-    "@capacitor/cli": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/local-notifications": "^8.0.2",
     "@tailwindcss/postcss": "^4.2.2",
-    "@types/node": "^25.6.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "autoprefixer": "^10.5.0",
     "next": "^14.2.35",
     "postcss": "^8.5.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwindcss": "^4.2.2",
-    "typescript": "^6.0.3",
     "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.5.0",
+    "typescript": "^5.8.3"
   }
 }

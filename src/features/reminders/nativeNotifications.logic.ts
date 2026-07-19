@@ -9,19 +9,71 @@ import {
   removeFromCache,
 } from './notificationIds.logic'
 
+const REMINDER_CHANNEL_ID = 'medicine-reminders-loud-v3'
+const REMINDER_SOUND = 'medicine_alarm.wav'
+
 export const isNativeNotificationsAvailable = (): boolean => Capacitor.isNativePlatform()
+
+export const ensureReminderChannel = async (): Promise<boolean> => {
+  if (!isNativeNotificationsAvailable()) return false
+
+  try {
+    const result = await LocalNotifications.listChannels()
+    const exists = result.channels.some((channel) => channel.id === REMINDER_CHANNEL_ID)
+    if (exists) return true
+
+    await LocalNotifications.createChannel({
+      id: REMINDER_CHANNEL_ID,
+      name: 'Напоминания о лекарствах',
+      description: 'Громкие напоминания о времени приёма лекарств',
+      sound: REMINDER_SOUND,
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+      lights: true,
+      lightColor: '#2F6B4F',
+    })
+    return true
+  } catch (error) {
+    console.error('Notification channel creation failed:', error)
+    return false
+  }
+}
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return false
 
   try {
     const current = await LocalNotifications.checkPermissions()
-    if (current.display === 'granted') return true
-    const result = await LocalNotifications.requestPermissions()
-    return result.display === 'granted'
+    const granted = current.display === 'granted'
+      ? true
+      : (await LocalNotifications.requestPermissions()).display === 'granted'
+
+    if (granted) await ensureReminderChannel()
+    return granted
   } catch (error) {
     console.error('Permission request failed:', error)
     return false
+  }
+}
+
+export const hasExactReminderPermission = async (): Promise<boolean> => {
+  if (!isNativeNotificationsAvailable()) return true
+
+  try {
+    const result = await LocalNotifications.checkExactNotificationSetting()
+    return result.exact_alarm === 'granted'
+  } catch {
+    return true
+  }
+}
+
+export const openExactReminderSettings = async (): Promise<void> => {
+  if (!isNativeNotificationsAvailable()) return
+  try {
+    await LocalNotifications.changeExactNotificationSetting()
+  } catch (error) {
+    console.error('Exact reminder settings failed:', error)
   }
 }
 
@@ -31,7 +83,9 @@ const notificationBody = (medicine: Medicine) =>
 const notificationBase = (medicine: Medicine, time: string) => ({
   title: 'Пора принять лекарство',
   body: notificationBody(medicine),
-  sound: '',
+  largeBody: `${notificationBody(medicine)}. Запланированное время: ${time}.`,
+  sound: REMINDER_SOUND,
+  channelId: REMINDER_CHANNEL_ID,
   extra: { medicineId: medicine.id, time },
   autoCancel: true,
 })
@@ -88,15 +142,24 @@ export const scheduleTestNotification = async (): Promise<boolean> => {
   const hasPermission = await requestNotificationPermission()
   if (!hasPermission) return false
 
+  const exactAllowed = await hasExactReminderPermission()
+  if (!exactAllowed) {
+    await openExactReminderSettings()
+    return false
+  }
+
+  await ensureReminderChannel()
   await LocalNotifications.schedule({
     notifications: [
       {
         id: Math.floor(Date.now() % 2_000_000_000),
         title: 'Проверка напоминания',
-        body: 'Звук и уведомления работают',
-        sound: '',
+        body: 'Громкий звук и уведомления работают',
+        largeBody: 'Проверка завершена. Громкий звук, вибрация и уведомления работают.',
+        sound: REMINDER_SOUND,
+        channelId: REMINDER_CHANNEL_ID,
         autoCancel: true,
-        schedule: { at: new Date(Date.now() + 2500), allowWhileIdle: true },
+        schedule: { at: new Date(Date.now() + 3000), allowWhileIdle: true },
         extra: { test: true },
       },
     ],
@@ -198,6 +261,7 @@ export const scheduleNotificationsForMedicine = async (
 
   const hasPermission = await requestNotificationPermission()
   if (!hasPermission) return []
+  await ensureReminderChannel()
   await cancelAllNotificationsForMedicine(medicine.id)
 
   const times = medicine.customTimes && medicine.customTimes.length > 0

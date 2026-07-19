@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { Medicine } from '@/types'
+import type { Medicine } from '@/types'
+import { formatDosage } from '@/lib/formatMedicine'
 
 interface MedicinesStore {
   medicines: Medicine[]
@@ -19,6 +20,7 @@ const persistMedicines = (medicines: Medicine[]) => {
 
 const reviveMedicine = (medicine: Medicine): Medicine => ({
   ...medicine,
+  dosage: formatDosage(String(medicine.dosage ?? '')),
   createdAt: new Date(medicine.createdAt),
   endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
 })
@@ -79,7 +81,9 @@ export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
         return
       }
 
-      set({ medicines: parsed.map(reviveMedicine) })
+      const medicines = parsed.map(reviveMedicine)
+      set({ medicines })
+      persistMedicines(medicines)
     } catch (error) {
       console.error('Medicine load error:', error)
       set({ medicines: [] })

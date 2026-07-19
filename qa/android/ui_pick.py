@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
 import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 
 
-def center(bounds: str) -> tuple[int, int]:
-    left_top, right_bottom = bounds.replace('][', ',').replace('[', '').replace(']', '').split(',')
-    x1, y1 = map(int, left_top.split(',')) if ',' in left_top else (0, 0)
-    x2, y2 = map(int, right_bottom.split(',')) if ',' in right_bottom else (0, 0)
-    return ((x1 + x2) // 2, (y1 + y2) // 2)
-
-
-def parse_bounds(bounds: str) -> tuple[int, int]:
-    import re
+def parse_bounds(bounds: str) -> tuple[int, int, int, int]:
     match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
     if not match:
         raise ValueError(f"Invalid bounds: {bounds}")
-    x1, y1, x2, y2 = map(int, match.groups())
-    return ((x1 + x2) // 2, (y1 + y2) // 2)
+    return tuple(map(int, match.groups()))
 
 
 def main() -> int:
@@ -30,7 +22,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = ET.parse(args.xml_file).getroot()
-    matches = []
+    matches: list[tuple[int, int, int, int]] = []
     needle = (args.text or '').casefold()
 
     for node in root.iter('node'):
@@ -47,18 +39,26 @@ def main() -> int:
             ]).casefold()
             if needle not in haystack:
                 continue
+
         bounds = attrs.get('bounds')
         if not bounds:
             continue
-        matches.append((node, bounds))
+        try:
+            x1, y1, x2, y2 = parse_bounds(bounds)
+        except ValueError:
+            continue
+
+        # Chromium exposes off-screen DOM elements as clickable nodes with [0,0][0,0].
+        # They must never be tapped; the caller should scroll and dump the tree again.
+        if x2 <= x1 or y2 <= y1:
+            continue
+        matches.append((x1, y1, x2, y2))
 
     if args.index < 0 or args.index >= len(matches):
-        print('', end='')
         return 2
 
-    _, bounds = matches[args.index]
-    x, y = parse_bounds(bounds)
-    print(f'{x} {y}')
+    x1, y1, x2, y2 = matches[args.index]
+    print(f'{(x1 + x2) // 2} {(y1 + y2) // 2}')
     return 0
 
 

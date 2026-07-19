@@ -15,7 +15,7 @@ on:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -56,8 +56,8 @@ jobs:
 
   emulator-qa:
     needs: build-apk
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -96,26 +96,94 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
 
-      - name: Run emulator scenario
-        uses: ReactiveCircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api_level }}
-          target: google_apis
-          arch: x86_64
-          profile: pixel_2
-          force-avd-creation: true
-          disable-animations: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
-            bash qa/android/run_device_qa.sh \
-              '${{ matrix.profile_name }}' \
-              '${{ matrix.width }}' \
-              '${{ matrix.height }}' \
-              '${{ matrix.density }}' \
-              '${{ matrix.tablet }}' \
-              'apk/app-debug.apk'
+      - name: Create and boot emulator
+        id: emulator
+        continue-on-error: true
+        env:
+          PROFILE_NAME: ${{ matrix.profile_name }}
+          API_LEVEL: ${{ matrix.api_level }}
+        run: |
+          set -o pipefail
+          RESULT_DIR="qa-results/${PROFILE_NAME}"
+          mkdir -p "${RESULT_DIR}/logs"
+          SETUP_LOG="${RESULT_DIR}/logs/emulator-setup.txt"
+          SYSTEM_IMAGE="system-images;android-${API_LEVEL};google_apis;x86_64"
+          AVD_NAME="qa-${PROFILE_NAME}"
+
+          {
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            echo "SYSTEM_IMAGE=${SYSTEM_IMAGE}"
+            echo "AVD_NAME=${AVD_NAME}"
+            echo "Available sdkmanager: $(command -v sdkmanager || true)"
+            echo "Available avdmanager: $(command -v avdmanager || true)"
+            echo "Available emulator: $(command -v emulator || true)"
+            echo "Available adb: $(command -v adb || true)"
+            yes | sdkmanager --licenses >/dev/null || true
+            sdkmanager "platform-tools" "emulator" "${SYSTEM_IMAGE}"
+            echo no | avdmanager create avd --force --name "${AVD_NAME}" --package "${SYSTEM_IMAGE}" --device "pixel_2"
+            emulator -list-avds
+          } 2>&1 | tee "${SETUP_LOG}"
+
+          nohup emulator \
+            -avd "${AVD_NAME}" \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            -memory 4096 \
+            -cores 2 \
+            > "${RESULT_DIR}/logs/emulator-runtime.txt" 2>&1 &
+          echo $! > "${RESULT_DIR}/emulator.pid"
+
+          BOOTED=0
+          for attempt in $(seq 1 72); do
+            adb devices -l | tee "${RESULT_DIR}/logs/adb-devices-latest.txt"
+            if adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then
+              BOOTED=1
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "${BOOTED}" -ne 1 ]; then
+            echo "Эмулятор не загрузился за 6 минут." | tee "${RESULT_DIR}/crash-message.txt"
+            adb devices -l >> "${RESULT_DIR}/logs/emulator-setup.txt" 2>&1 || true
+            exit 1
+          fi
+
+          adb shell input keyevent 82 || true
+          adb shell settings put global window_animation_scale 0 || true
+          adb shell settings put global transition_animation_scale 0 || true
+          adb shell settings put global animator_duration_scale 0 || true
+          echo "Эмулятор загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
+
+      - name: Run complete adb QA scenario
+        id: qa
+        if: steps.emulator.outcome == 'success'
+        continue-on-error: true
+        run: |
+          chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
+          bash qa/android/run_device_qa.sh \
+            '${{ matrix.profile_name }}' \
+            '${{ matrix.width }}' \
+            '${{ matrix.height }}' \
+            '${{ matrix.density }}' \
+            '${{ matrix.tablet }}' \
+            'apk/app-debug.apk'
+
+      - name: Record infrastructure failure
+        if: steps.emulator.outcome != 'success'
+        run: |
+          RESULT_DIR="qa-results/${{ matrix.profile_name }}"
+          mkdir -p "${RESULT_DIR}/logs"
+          echo "Тест приложения не начался: эмулятор Android не загрузился. Подробности в logs/emulator-setup.txt и logs/emulator-runtime.txt." > "${RESULT_DIR}/summary.md"
+          test -f "${RESULT_DIR}/actions.txt" || echo "Действия с приложением не выполнялись: эмулятор не загрузился." > "${RESULT_DIR}/actions.txt"
+          test -f "${RESULT_DIR}/crash-message.txt" || echo "Сообщение о падении приложения отсутствует, потому что APK не был запущен." > "${RESULT_DIR}/crash-message.txt"
 
       - name: Upload complete QA evidence
         if: always()
@@ -123,5 +191,9 @@ jobs:
         with:
           name: qa-${{ matrix.profile_name }}
           path: qa-results/${{ matrix.profile_name }}
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
+
+      - name: Fail job after evidence upload
+        if: steps.emulator.outcome != 'success' || steps.qa.outcome == 'failure'
+        run: exit 1

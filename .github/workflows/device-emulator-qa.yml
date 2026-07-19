@@ -98,12 +98,16 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm || true
 
-      - name: Create and boot emulator
-        id: emulator
+      - name: Boot emulator and run complete adb QA
+        id: qa
         continue-on-error: true
         env:
           PROFILE_NAME: ${{ matrix.profile_name }}
           API_LEVEL: ${{ matrix.api_level }}
+          WIDTH: ${{ matrix.width }}
+          HEIGHT: ${{ matrix.height }}
+          DENSITY: ${{ matrix.density }}
+          TABLET: ${{ matrix.tablet }}
         run: |
           set -o pipefail
           RESULT_DIR="qa-results/${PROFILE_NAME}"
@@ -116,6 +120,7 @@ jobs:
           AVDMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name avdmanager 2>/dev/null | sort | tail -n 1)"
           EMULATOR="${ANDROID_HOME}/emulator/emulator"
           ADB="${ANDROID_HOME}/platform-tools/adb"
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
 
           {
             echo "ANDROID_HOME=${ANDROID_HOME}"
@@ -135,7 +140,6 @@ jobs:
             "${EMULATOR}" -list-avds
           } 2>&1 | tee "${SETUP_LOG}"
 
-          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
           nohup "${EMULATOR}" \
             -avd "${AVD_NAME}" \
             -no-window \
@@ -148,7 +152,14 @@ jobs:
             -memory 4096 \
             -cores 2 \
             > "${RESULT_DIR}/logs/emulator-runtime.txt" 2>&1 &
-          echo $! > "${RESULT_DIR}/emulator.pid"
+          EMULATOR_PID=$!
+          echo "${EMULATOR_PID}" > "${RESULT_DIR}/emulator.pid"
+
+          cleanup() {
+            "${ADB}" emu kill >/dev/null 2>&1 || true
+            kill "${EMULATOR_PID}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
 
           BOOTED=0
           for attempt in $(seq 1 72); do
@@ -162,7 +173,8 @@ jobs:
 
           if [ "${BOOTED}" -ne 1 ]; then
             echo "Эмулятор не загрузился за 6 минут." | tee "${RESULT_DIR}/crash-message.txt"
-            "${ADB}" devices -l >> "${RESULT_DIR}/logs/emulator-setup.txt" 2>&1 || true
+            echo "Действия с приложением не выполнялись: эмулятор не загрузился." > "${RESULT_DIR}/actions.txt"
+            echo "Тест приложения не начался: эмулятор Android не загрузился." > "${RESULT_DIR}/summary.md"
             exit 1
           fi
 
@@ -170,34 +182,16 @@ jobs:
           "${ADB}" shell settings put global window_animation_scale 0 || true
           "${ADB}" shell settings put global transition_animation_scale 0 || true
           "${ADB}" shell settings put global animator_duration_scale 0 || true
-          echo "Эмулятор загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
+          echo "Эмулятор загружен. Запускаем APK и сценарий." | tee -a "${SETUP_LOG}"
 
-      - name: Run complete adb QA scenario
-        id: qa
-        if: steps.emulator.outcome == 'success'
-        continue-on-error: true
-        run: |
-          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-          command -v adb
-          command -v bash
-          command -v python3
           chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
           bash qa/android/run_device_qa.sh \
-            '${{ matrix.profile_name }}' \
-            '${{ matrix.width }}' \
-            '${{ matrix.height }}' \
-            '${{ matrix.density }}' \
-            '${{ matrix.tablet }}' \
+            "${PROFILE_NAME}" \
+            "${WIDTH}" \
+            "${HEIGHT}" \
+            "${DENSITY}" \
+            "${TABLET}" \
             'apk/app-debug.apk'
-
-      - name: Record infrastructure failure
-        if: steps.emulator.outcome != 'success'
-        run: |
-          RESULT_DIR="qa-results/${{ matrix.profile_name }}"
-          mkdir -p "${RESULT_DIR}/logs"
-          echo "Тест приложения не начался: эмулятор Android не загрузился. Подробности в logs/emulator-setup.txt и logs/emulator-runtime.txt." > "${RESULT_DIR}/summary.md"
-          test -f "${RESULT_DIR}/actions.txt" || echo "Действия с приложением не выполнялись: эмулятор не загрузился." > "${RESULT_DIR}/actions.txt"
-          test -f "${RESULT_DIR}/crash-message.txt" || echo "Сообщение о падении приложения отсутствует, потому что APK не был запущен." > "${RESULT_DIR}/crash-message.txt"
 
       - name: Upload complete QA evidence
         if: always()
@@ -209,5 +203,5 @@ jobs:
           retention-days: 14
 
       - name: Fail job after evidence upload
-        if: steps.emulator.outcome != 'success' || steps.qa.outcome == 'failure'
+        if: steps.qa.outcome == 'failure'
         run: exit 1

@@ -1,0 +1,1 @@
+The workflow installs the current Pills-05 debug APK into three Android emulator profiles and drives the UI with coordinates derived from UIAutomator XML. It captures evidence even when a step fails, so debugging data remains available.

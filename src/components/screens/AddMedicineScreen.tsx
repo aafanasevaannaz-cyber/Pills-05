@@ -1,16 +1,19 @@
 'use client'
 
 import React, { useEffect } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
 import { useAddMedicineUI } from '@/features/medicines/uiStore'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useRemindersStore } from '@/features/reminders/store'
-import { Medicine } from '@/types'
-import { useRouter } from 'next/navigation'
+import type { Medicine } from '@/types'
 
 const isValidTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+
+const stepNames = ['Название', 'Частота', 'Время', 'Дозировка']
 
 export const AddMedicineScreen: React.FC = () => {
   const router = useRouter()
@@ -34,91 +37,71 @@ export const AddMedicineScreen: React.FC = () => {
     reset,
   } = useAddMedicineUI()
 
-  const { medicines, addMedicine, findByName } = useMedicinesStore()
-  const syncReminderForMedicine = useRemindersStore(
-    (state) => state.syncReminderForMedicine
-  )
+  const medicines = useMedicinesStore((state) => state.medicines)
+  const addMedicine = useMedicinesStore((state) => state.addMedicine)
+  const findByName = useMedicinesStore((state) => state.findByName)
+  const syncReminderForMedicine = useRemindersStore((state) => state.syncReminderForMedicine)
 
-  useEffect(() => {
-    return () => reset()
-  }, [reset])
+  useEffect(() => () => reset(), [reset])
 
   const duplicate = name.length > 0 ? findByName(name) : null
 
   const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value
     setName(value)
-    const found =
-      value.length > 0
-        ? medicines.find((medicine) =>
-            medicine.name.toLowerCase().includes(value.toLowerCase())
-          )
-        : undefined
-    setShowDuplicate(Boolean(found))
+    const found = value.trim().length > 1
+      ? medicines.some((medicine) => medicine.name.toLowerCase() === value.trim().toLowerCase())
+      : false
+    setShowDuplicate(found)
+    setMessage('')
   }
 
-  const handleFrequencySelect = (value: string) => {
+  const chooseFrequency = (value: string) => {
     setFrequency(value)
     setMessage('')
   }
 
-  const handleScheduleTypeSelect = (value: string) => {
+  const chooseTime = (value: string) => {
     setScheduleType(value)
-    setMessage('')
-  }
-
-  const handleTimeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    let value = event.target.value.replace(/\D/g, '').slice(0, 4)
-    if (value.length > 2) value = `${value.slice(0, 2)}:${value.slice(2)}`
-    setCustomTime(value)
-  }
-
-  const handleDosageSelect = (value: string) => {
-    setDosage(value)
     setMessage('')
   }
 
   const handleSave = async () => {
     if (!name.trim()) {
-      setMessage('⚠ Введите название лекарства')
+      setMessage('Введите название лекарства')
+      setStep(1)
       return
     }
     if (!frequency) {
-      setMessage('⚠ Выберите частоту приёма')
+      setMessage('Выберите частоту приёма')
+      setStep(2)
       return
     }
-    if (!scheduleType && !['morning', 'twice', 'three_times'].includes(frequency)) {
-      setMessage('⚠ Выберите время')
+    if (frequency !== 'as_needed' && !scheduleType) {
+      setMessage('Выберите время приёма')
+      setStep(3)
       return
     }
     if (scheduleType === 'custom' && !isValidTime(customTime)) {
-      setMessage('⚠ Введите корректное время, например 08:00')
+      setMessage('Проверьте время, например 08:30')
+      setStep(3)
       return
     }
-    if (!dosage) {
-      setMessage('⚠ Выберите дозировку')
+    if (!dosage.trim()) {
+      setMessage('Укажите дозировку')
+      setStep(4)
       return
     }
-
-    const normalizedFrequency: Medicine['frequency'] =
-      frequency === 'every_other' || frequency === 'as_needed'
-        ? frequency
-        : 'daily'
-
-    const shortcutSchedule = ['morning', 'twice', 'three_times'].includes(frequency)
-      ? frequency
-      : scheduleType
-
-    const normalizedScheduleType = shortcutSchedule as Medicine['scheduleType']
 
     const newMedicine: Medicine = {
       id: Date.now().toString(),
       name: name.trim(),
-      dosage,
-      frequency: normalizedFrequency,
-      scheduleType: normalizedScheduleType,
-      customTimes:
-        normalizedScheduleType === 'custom' ? [customTime] : undefined,
+      dosage: dosage.trim(),
+      frequency: frequency as Medicine['frequency'],
+      scheduleType: frequency === 'as_needed'
+        ? 'custom'
+        : scheduleType as Medicine['scheduleType'],
+      customTimes: scheduleType === 'custom' && frequency !== 'as_needed' ? [customTime] : undefined,
       createdAt: new Date(),
     }
 
@@ -126,215 +109,199 @@ export const AddMedicineScreen: React.FC = () => {
 
     try {
       await syncReminderForMedicine(newMedicine)
-      setMessage('✓ Лекарство сохранено')
-      setTimeout(() => {
+      setMessage('Лекарство сохранено')
+      window.setTimeout(() => {
         reset()
-        router.push('/')
-      }, 800)
+        router.replace('/')
+      }, 650)
     } catch (error) {
       console.error('Reminder scheduling failed:', error)
-      setMessage('✓ Лекарство сохранено. Проверьте разрешение на уведомления')
+      setMessage('Лекарство сохранено. Разрешите уведомления в настройках телефона')
     }
   }
 
+  const nextFromFrequency = () => {
+    if (!frequency) {
+      setMessage('Сначала выберите частоту')
+      return
+    }
+    setMessage('')
+    setStep(frequency === 'as_needed' ? 4 : 3)
+  }
+
   return (
-    <div className="p-4 pb-20">
-      <div className="mb-4 text-sm text-gray-600">
-        Шаг {step} из 4
+    <div className="app-page">
+      <header className="app-header">
+        <div>
+          <p className="app-subtitle">Шаг {step} из 4 · {stepNames[step - 1]}</p>
+          <h1 className="app-title">Добавить лекарство</h1>
+        </div>
+        <Link href="/" className="ui-button ui-button--secondary">Отмена</Link>
+      </header>
+
+      <div className="progress-track" aria-label={`Шаг ${step} из 4`}>
+        <div className="progress-fill" style={{ width: `${step * 25}%` }} />
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Добавить лекарство</h1>
-
-      {step === 1 && (
-        <>
-          <Input
-            label="Название лекарства"
-            placeholder="Введите название"
-            value={name}
-            onChange={handleNameChange}
-            autoFocus
-          />
-
-          {showDuplicate && duplicate && (
-            <Card className="mb-4 border-orange-200 bg-orange-50">
-              <p className="text-orange-900 mb-3">
-                Такое лекарство уже есть: <strong>{duplicate.name}</strong>
-              </p>
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => setStep(2)}>
-                  Изменить
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setShowDuplicate(false)
-                    setStep(2)
-                  }}
-                >
-                  Добавить ещё
-                </Button>
+      <Card className="ui-card--soft" >
+        {step === 1 && (
+          <div className="page-stack">
+            <div>
+              <h2 className="section-title">Как называется лекарство?</h2>
+              <p className="muted">Напишите название так, как оно указано на упаковке.</p>
+            </div>
+            <Input
+              label="Название"
+              placeholder="Например, Зенон"
+              value={name}
+              onChange={handleNameChange}
+              autoFocus
+              autoComplete="off"
+            />
+            {showDuplicate && duplicate && (
+              <div className="status-strip" role="alert">
+                Такое лекарство уже добавлено: {duplicate.name}
               </div>
-            </Card>
-          )}
-
-          {!showDuplicate && name.length > 0 && (
+            )}
             <Button
               variant="primary"
-              className="w-full"
-              onClick={() => setStep(2)}
+              className="ui-button--full"
+              disabled={!name.trim()}
+              onClick={() => {
+                setMessage('')
+                setStep(2)
+              }}
             >
-              Далее →
-            </Button>
-          )}
-        </>
-      )}
-
-      {step === 2 && (
-        <>
-          <p className="text-gray-600 mb-4">Выберите частоту приёма:</p>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {[
-              { id: 'daily', label: 'Каждый день' },
-              { id: 'every_other', label: 'Через день' },
-              { id: 'morning', label: 'Утром' },
-              { id: 'twice', label: 'Утром и вечером' },
-              { id: 'three_times', label: '3 раза в день' },
-              { id: 'until_date', label: 'До даты' },
-              { id: 'as_needed', label: 'По необходимости' },
-            ].map((option) => (
-              <Button
-                key={option.id}
-                variant={frequency === option.id ? 'primary' : 'secondary'}
-                className="w-full"
-                onClick={() => handleFrequencySelect(option.id)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => setStep(1)}
-            >
-              ← Назад
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={() => setStep(3)}
-            >
-              Далее →
+              Продолжить
             </Button>
           </div>
-        </>
-      )}
+        )}
 
-      {step === 3 && (
-        <>
-          <p className="text-gray-600 mb-4">Выберите время приёма:</p>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {[
-              { id: 'morning', label: 'Утро 08:00' },
-              { id: 'afternoon', label: 'День 14:00' },
-              { id: 'evening', label: 'Вечер 20:00' },
-              { id: 'night', label: 'Ночь 22:00' },
-            ].map((option) => (
-              <Button
-                key={option.id}
-                variant={scheduleType === option.id ? 'primary' : 'secondary'}
-                className="w-full"
-                onClick={() => handleScheduleTypeSelect(option.id)}
-              >
-                {option.label}
-              </Button>
-            ))}
+        {step === 2 && (
+          <div className="page-stack">
+            <div>
+              <h2 className="section-title">Как часто принимать?</h2>
+              <p className="muted">Время выберем на следующем шаге.</p>
+            </div>
+            <div className="choice-grid">
+              {[
+                { id: 'daily', title: 'Каждый день', description: 'Напоминание ежедневно' },
+                { id: 'every_other', title: 'Через день', description: 'Напоминание раз в два дня' },
+                { id: 'as_needed', title: 'По необходимости', description: 'Без автоматического напоминания' },
+              ].map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className={`choice${frequency === option.id ? ' is-selected' : ''}`}
+                  onClick={() => chooseFrequency(option.id)}
+                >
+                  <span className="choice__text">
+                    <span className="choice__title">{option.title}</span>
+                    <span className="choice__description">{option.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="form-actions">
+              <Button variant="secondary" onClick={() => setStep(1)}>Назад</Button>
+              <Button variant="primary" onClick={nextFromFrequency}>Продолжить</Button>
+            </div>
           </div>
+        )}
 
-          <div className="mb-4">
-            <Button
-              variant={scheduleType === 'custom' ? 'primary' : 'secondary'}
-              className="w-full mb-2"
-              onClick={() => handleScheduleTypeSelect('custom')}
-            >
-              Своё время
-            </Button>
+        {step === 3 && (
+          <div className="page-stack">
+            <div>
+              <h2 className="section-title">В какое время напомнить?</h2>
+              <p className="muted">Можно выбрать готовый режим или указать точное время.</p>
+            </div>
+            <div className="choice-grid">
+              {[
+                { id: 'morning', title: '08:00', description: 'Утром' },
+                { id: 'afternoon', title: '14:00', description: 'Днём' },
+                { id: 'evening', title: '20:00', description: 'Вечером' },
+                { id: 'night', title: '22:00', description: 'На ночь' },
+                { id: 'twice', title: '08:00 и 20:00', description: 'Два раза в день' },
+                { id: 'three_times', title: '08:00, 14:00 и 20:00', description: 'Три раза в день' },
+                { id: 'custom', title: 'Своё время', description: 'Указать вручную' },
+              ].map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className={`choice${scheduleType === option.id ? ' is-selected' : ''}`}
+                  onClick={() => chooseTime(option.id)}
+                >
+                  <span className="choice__text">
+                    <span className="choice__title">{option.title}</span>
+                    <span className="choice__description">{option.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
             {scheduleType === 'custom' && (
               <Input
-                label="Время (0800 = 08:00)"
-                placeholder="0800"
+                label="Точное время"
+                type="time"
                 value={customTime}
-                onChange={handleTimeChange}
-                maxLength={5}
+                onChange={(event) => setCustomTime(event.target.value)}
+                help="Используйте часы и минуты"
               />
             )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => setStep(2)}
-            >
-              ← Назад
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={() => setStep(4)}
-            >
-              Далее →
-            </Button>
-          </div>
-        </>
-      )}
-
-      {step === 4 && (
-        <>
-          <p className="text-gray-600 mb-4">Выберите дозировку:</p>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {[
-              { id: '1_tab', label: '1 таблетка' },
-              { id: 'half_tab', label: '1/2 таблетки' },
-              { id: '2_tab', label: '2 таблетки' },
-              { id: 'mg', label: 'мг' },
-            ].map((option) => (
+            <div className="form-actions">
+              <Button variant="secondary" onClick={() => setStep(2)}>Назад</Button>
               <Button
-                key={option.id}
-                variant={dosage === option.id ? 'primary' : 'secondary'}
-                className="w-full"
-                onClick={() => handleDosageSelect(option.id)}
+                variant="primary"
+                onClick={() => {
+                  if (!scheduleType || (scheduleType === 'custom' && !isValidTime(customTime))) {
+                    setMessage('Выберите время приёма')
+                    return
+                  }
+                  setMessage('')
+                  setStep(4)
+                }}
               >
-                {option.label}
+                Продолжить
               </Button>
-            ))}
+            </div>
           </div>
+        )}
 
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => setStep(3)}
-            >
-              ← Назад
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={handleSave}
-            >
-              Сохранить
-            </Button>
+        {step === 4 && (
+          <div className="page-stack">
+            <div>
+              <h2 className="section-title">Какая дозировка?</h2>
+              <p className="muted">Дозировка будет крупно показана в напоминании.</p>
+            </div>
+            <div className="choice-grid">
+              {['1 таблетка', '½ таблетки', '2 таблетки', '5 мл'].map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={`choice${dosage === option ? ' is-selected' : ''}`}
+                  onClick={() => setDosage(option)}
+                >
+                  <span className="choice__title">{option}</span>
+                </button>
+              ))}
+            </div>
+            <Input
+              label="Или укажите свою дозировку"
+              placeholder="Например, 10 мг"
+              value={dosage}
+              onChange={(event) => {
+                setDosage(event.target.value)
+                setMessage('')
+              }}
+            />
+            <div className="form-actions">
+              <Button variant="secondary" onClick={() => setStep(frequency === 'as_needed' ? 2 : 3)}>Назад</Button>
+              <Button variant="primary" onClick={() => void handleSave()}>Сохранить</Button>
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </Card>
 
-      {message && (
-        <Card className="mt-4 bg-green-50 border-green-200">
-          <p className="text-green-900 text-center font-semibold">{message}</p>
-        </Card>
-      )}
+      {message && <div className="status-strip" role="status" style={{ marginTop: 16 }}>{message}</div>}
     </div>
   )
 }

@@ -1,0 +1,127 @@
+name: Three-device emulator QA
+
+on:
+  pull_request:
+    branches:
+      - claude/setup-documentation-uVAKM
+    paths:
+      - '.github/workflows/device-emulator-qa.yml'
+      - 'qa/android/**'
+      - 'src/**'
+      - 'android/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: npm run type-check
+
+      - name: Export and sync Android
+        run: npm run android:sync
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace --console=plain
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-qa-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  emulator-qa:
+    needs: build-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile_name: realme-c55
+            api_level: 35
+            width: 1080
+            height: 2400
+            density: 400
+            tablet: 'false'
+          - profile_name: samsung-galaxy-tab-a11-plus
+            api_level: 36
+            width: 1200
+            height: 1920
+            density: 240
+            tablet: 'true'
+          - profile_name: lenovo-tab-m10-fhd-plus
+            api_level: 29
+            width: 1200
+            height: 1920
+            density: 240
+            tablet: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: pills-qa-apk
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run emulator scenario
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api_level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
+            bash qa/android/run_device_qa.sh \
+              '${{ matrix.profile_name }}' \
+              '${{ matrix.width }}' \
+              '${{ matrix.height }}' \
+              '${{ matrix.density }}' \
+              '${{ matrix.tablet }}' \
+              'apk/app-debug.apk'
+
+      - name: Upload complete QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-${{ matrix.profile_name }}
+          path: qa-results/${{ matrix.profile_name }}
+          if-no-files-found: warn
+          retention-days: 14

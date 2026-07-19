@@ -12,6 +12,16 @@ on:
       - 'android/**'
       - 'package.json'
       - 'capacitor.config.ts'
+  pull_request:
+    branches:
+      - claude/setup-documentation-uVAKM
+    paths:
+      - '.github/workflows/device-emulator-qa.yml'
+      - 'scripts/android_qa.py'
+      - 'src/**'
+      - 'android/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
 
 permissions:
   contents: read

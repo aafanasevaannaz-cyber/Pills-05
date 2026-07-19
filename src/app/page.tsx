@@ -17,32 +17,41 @@ export default function Home() {
     let mounted = true
 
     const initialize = async () => {
-      await initializeCapacitor()
+      try {
+        await initializeCapacitor()
 
-      const platform = isCapacitorAvailable() ? 'android' : 'web'
-      useRemindersStore.getState().setPlatform(platform)
-      useSettingsStore.getState().loadFromDB()
-      useMedicinesStore.getState().loadFromDB()
-      useHistoryStore.getState().loadFromDB()
+        const platform = isCapacitorAvailable() ? 'android' : 'web'
+        useRemindersStore.getState().setPlatform(platform)
+        useSettingsStore.getState().loadFromDB()
+        useMedicinesStore.getState().loadFromDB()
+        useHistoryStore.getState().loadFromDB()
 
-      const medicines = useMedicinesStore.getState().medicines
-      useRemindersStore.getState().generateFromMedicines(medicines)
+        const medicines = useMedicinesStore.getState().medicines
+        useRemindersStore.getState().generateFromMedicines(medicines)
 
-      if (platform === 'android') {
-        if (useSettingsStore.getState().pushNotificationsEnabled) {
-          await Promise.allSettled(
-            medicines.map((medicine) =>
-              useRemindersStore.getState().syncReminderForMedicine(medicine)
+        if (platform === 'android') {
+          if (useSettingsStore.getState().pushNotificationsEnabled) {
+            await Promise.all(
+              medicines.map((medicine) =>
+                useRemindersStore
+                  .getState()
+                  .syncReminderForMedicine(medicine)
+                  .catch((error) => {
+                    console.error('Reminder synchronization failed:', error)
+                  })
+              )
             )
-          )
-        }
+          }
 
-        if (!localStorage.getItem('permissions_shown') && mounted) {
-          setShowPermissions(true)
+          if (!localStorage.getItem('permissions_shown') && mounted) {
+            setShowPermissions(true)
+          }
         }
+      } catch (error) {
+        console.error('Application initialization failed:', error)
+      } finally {
+        if (mounted) setInitialized(true)
       }
-
-      if (mounted) setInitialized(true)
     }
 
     void initialize()

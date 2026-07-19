@@ -53,12 +53,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "TypeScript errors:"
           cat typecheck.log
           {
             echo '### TypeScript errors'
             echo '```text'
-            sed -n '1,160p' typecheck.log
+            tail -n 60 typecheck.log
             echo '```'
           } > typecheck-comment.md
           gh pr comment 1 --body-file typecheck-comment.md
@@ -80,12 +79,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Gradle build errors:"
-          tail -n 180 gradle-build.log
+          tail -n 60 gradle-build.log
           {
             echo '### Gradle build errors'
             echo '```text'
-            tail -n 180 gradle-build.log
+            tail -n 60 gradle-build.log
             echo '```'
           } > gradle-comment.md
           gh pr comment 1 --body-file gradle-comment.md

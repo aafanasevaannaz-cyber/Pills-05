@@ -112,21 +112,31 @@ jobs:
           SYSTEM_IMAGE="system-images;android-${API_LEVEL};google_apis;x86_64"
           AVD_NAME="qa-${PROFILE_NAME}"
 
+          SDKMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          AVDMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name avdmanager 2>/dev/null | sort | tail -n 1)"
+          EMULATOR="${ANDROID_HOME}/emulator/emulator"
+          ADB="${ANDROID_HOME}/platform-tools/adb"
+
           {
             echo "ANDROID_HOME=${ANDROID_HOME}"
             echo "SYSTEM_IMAGE=${SYSTEM_IMAGE}"
             echo "AVD_NAME=${AVD_NAME}"
-            echo "Available sdkmanager: $(command -v sdkmanager || true)"
-            echo "Available avdmanager: $(command -v avdmanager || true)"
-            echo "Available emulator: $(command -v emulator || true)"
-            echo "Available adb: $(command -v adb || true)"
-            yes | sdkmanager --licenses >/dev/null || true
-            sdkmanager "platform-tools" "emulator" "${SYSTEM_IMAGE}"
-            echo no | avdmanager create avd --force --name "${AVD_NAME}" --package "${SYSTEM_IMAGE}" --device "pixel_2"
-            emulator -list-avds
+            echo "SDKMANAGER=${SDKMANAGER}"
+            echo "AVDMANAGER=${AVDMANAGER}"
+            echo "EMULATOR=${EMULATOR}"
+            echo "ADB=${ADB}"
+            test -x "${SDKMANAGER}"
+            test -x "${AVDMANAGER}"
+            test -x "${ADB}"
+            yes | "${SDKMANAGER}" --licenses >/dev/null || true
+            "${SDKMANAGER}" "platform-tools" "emulator" "${SYSTEM_IMAGE}"
+            test -x "${EMULATOR}"
+            echo no | "${AVDMANAGER}" create avd --force --name "${AVD_NAME}" --package "${SYSTEM_IMAGE}" --device "pixel_2"
+            "${EMULATOR}" -list-avds
           } 2>&1 | tee "${SETUP_LOG}"
 
-          nohup emulator \
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
+          nohup "${EMULATOR}" \
             -avd "${AVD_NAME}" \
             -no-window \
             -no-audio \
@@ -142,8 +152,8 @@ jobs:
 
           BOOTED=0
           for attempt in $(seq 1 72); do
-            adb devices -l | tee "${RESULT_DIR}/logs/adb-devices-latest.txt"
-            if adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then
+            "${ADB}" devices -l | tee "${RESULT_DIR}/logs/adb-devices-latest.txt"
+            if "${ADB}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then
               BOOTED=1
               break
             fi
@@ -152,20 +162,22 @@ jobs:
 
           if [ "${BOOTED}" -ne 1 ]; then
             echo "Эмулятор не загрузился за 6 минут." | tee "${RESULT_DIR}/crash-message.txt"
-            adb devices -l >> "${RESULT_DIR}/logs/emulator-setup.txt" 2>&1 || true
+            "${ADB}" devices -l >> "${RESULT_DIR}/logs/emulator-setup.txt" 2>&1 || true
             exit 1
           fi
 
-          adb shell input keyevent 82 || true
-          adb shell settings put global window_animation_scale 0 || true
-          adb shell settings put global transition_animation_scale 0 || true
-          adb shell settings put global animator_duration_scale 0 || true
+          "${ADB}" shell input keyevent 82 || true
+          "${ADB}" shell settings put global window_animation_scale 0 || true
+          "${ADB}" shell settings put global transition_animation_scale 0 || true
+          "${ADB}" shell settings put global animator_duration_scale 0 || true
           echo "Эмулятор загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
 
       - name: Run complete adb QA scenario
         id: qa
         if: steps.emulator.outcome == 'success'
         continue-on-error: true
+        env:
+          PATH: ${{ env.ANDROID_HOME }}/platform-tools:${{ env.ANDROID_HOME }}/emulator:${{ env.PATH }}
         run: |
           chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
           bash qa/android/run_device_qa.sh \

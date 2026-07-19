@@ -1,11 +1,12 @@
 {
   "name": "pills-05",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Понятные напоминания о лекарствах для телефона и планшета.",
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "prepare:notification-sound": "node scripts/generate-notification-sound.mjs",
+    "build": "npm run prepare:notification-sound && next build",
     "start": "next start",
     "type-check": "tsc --noEmit",
     "check": "npm run type-check && npm run build",

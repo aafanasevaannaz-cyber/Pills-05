@@ -1,0 +1,141 @@
+name: Target device emulator QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/pills-target-devices-20260719
+    paths:
+      - '.github/workflows/device-emulator-qa.yml'
+      - 'scripts/android_qa.py'
+      - 'src/**'
+      - 'android/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: npm run type-check
+
+      - name: Export web app and sync Android
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleDebug --stacktrace --console=plain
+
+      - name: Upload APK for emulator jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-qa-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+  emulator-qa:
+    needs: build-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: realme-c55
+            api: 35
+            profile: pixel_6
+            width: 1080
+            height: 2400
+            density: 400
+            orientation: portrait
+          - model: samsung-galaxy-tab-a11-plus
+            api: 35
+            profile: pixel_c
+            width: 1920
+            height: 1200
+            density: 240
+            orientation: landscape
+          - model: lenovo-tab-m10-fhd-plus
+            api: 29
+            profile: pixel_c
+            width: 1920
+            height: 1200
+            density: 240
+            orientation: landscape
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: emulator-qa-apk
+          path: qa-apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run adb QA on ${{ matrix.model }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          cores: 2
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: >-
+            python3 scripts/android_qa.py
+            --model '${{ matrix.model }}'
+            --width '${{ matrix.width }}'
+            --height '${{ matrix.height }}'
+            --density '${{ matrix.density }}'
+            --orientation '${{ matrix.orientation }}'
+            --apk qa-apk/app-debug.apk
+            --out qa-results/${{ matrix.model }}
+
+      - name: Upload complete QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-${{ matrix.model }}
+          path: qa-results/${{ matrix.model }}
+          if-no-files-found: warn
+          retention-days: 30

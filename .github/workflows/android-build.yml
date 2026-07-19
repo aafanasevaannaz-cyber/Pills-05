@@ -55,15 +55,13 @@ jobs:
         run: |
           echo "TypeScript errors:"
           cat typecheck.log
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            {
-              echo '### TypeScript errors'
-              echo '```text'
-              sed -n '1,160p' typecheck.log
-              echo '```'
-            } > typecheck-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file typecheck-comment.md
-          fi
+          {
+            echo '### TypeScript errors'
+            echo '```text'
+            sed -n '1,160p' typecheck.log
+            echo '```'
+          } > typecheck-comment.md
+          gh pr comment 1 --body-file typecheck-comment.md
           exit 1
 
       - name: Build static web app and sync Android
@@ -84,15 +82,13 @@ jobs:
         run: |
           echo "Gradle build errors:"
           tail -n 180 gradle-build.log
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            {
-              echo '### Gradle build errors'
-              echo '```text'
-              tail -n 180 gradle-build.log
-              echo '```'
-            } > gradle-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file gradle-comment.md
-          fi
+          {
+            echo '### Gradle build errors'
+            echo '```text'
+            tail -n 180 gradle-build.log
+            echo '```'
+          } > gradle-comment.md
+          gh pr comment 1 --body-file gradle-comment.md
           exit 1
 
       - name: Upload APK

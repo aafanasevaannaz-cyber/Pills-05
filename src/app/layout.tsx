@@ -1,29 +1,33 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import '@/styles/globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { BottomNav } from '@/components/BottomNav'
 
 export const metadata: Metadata = {
-  title: 'Напоминание о лекарствах',
-  description: 'Простое приложение для пожилых людей',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=5',
+  title: 'Мои лекарства',
+  description: 'Понятные напоминания о приёме лекарств',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f4f1ea' },
+    { media: '(prefers-color-scheme: dark)', color: '#141816' },
+  ],
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="theme-color" content="#ffffff" />
-      </head>
-      <body className="m-0 p-0">
+    <html lang="ru" suppressHydrationWarning>
+      <body>
         <ThemeProvider>
-          <main className="max-w-2xl mx-auto min-h-screen">
-            {children}
-          </main>
+          <div className="app-frame">
+            <main>{children}</main>
+            <BottomNav />
+          </div>
         </ThemeProvider>
       </body>
     </html>

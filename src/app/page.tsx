@@ -21,7 +21,6 @@ export default function Home() {
 
       const platform = isCapacitorAvailable() ? 'android' : 'web'
       useRemindersStore.getState().setPlatform(platform)
-
       useSettingsStore.getState().loadFromDB()
       useMedicinesStore.getState().loadFromDB()
       useHistoryStore.getState().loadFromDB()
@@ -30,11 +29,13 @@ export default function Home() {
       useRemindersStore.getState().generateFromMedicines(medicines)
 
       if (platform === 'android') {
-        await Promise.allSettled(
-          medicines.map((medicine) =>
-            useRemindersStore.getState().syncReminderForMedicine(medicine)
+        if (useSettingsStore.getState().pushNotificationsEnabled) {
+          await Promise.allSettled(
+            medicines.map((medicine) =>
+              useRemindersStore.getState().syncReminderForMedicine(medicine)
+            )
           )
-        )
+        }
 
         if (!localStorage.getItem('permissions_shown') && mounted) {
           setShowPermissions(true)
@@ -45,13 +46,16 @@ export default function Home() {
     }
 
     void initialize()
-
-    return () => {
-      mounted = false
-    }
+    return () => { mounted = false }
   }, [])
 
-  if (!initialized) return null
+  if (!initialized) {
+    return (
+      <div className="app-page" role="status">
+        <p className="muted">Загружаем лекарства…</p>
+      </div>
+    )
+  }
 
   return (
     <>

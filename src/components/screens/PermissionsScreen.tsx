@@ -10,69 +10,45 @@ interface PermissionsScreenProps {
 }
 
 export const PermissionsScreen: React.FC<PermissionsScreenProps> = ({ onComplete }) => {
-  const [requested, setRequested] = useState(false)
-  const [granted, setGranted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
 
-  const handleRequestPermission = async () => {
-    const result = await requestNotificationPermission()
-    setRequested(true)
-    if (result) {
-      setGranted(true)
+  const request = async () => {
+    setBusy(true)
+    const granted = await requestNotificationPermission()
+    if (granted) {
       localStorage.setItem('permissions_shown', 'true')
-      setTimeout(onComplete, 1500)
+      localStorage.removeItem('permissions_denied')
+      setMessage('Уведомления включены')
+      window.setTimeout(onComplete, 650)
     } else {
-      // Пользователь отказал — запомнить для повторного предложения
       localStorage.setItem('permissions_denied', 'true')
-      setTimeout(onComplete, 2000)
+      setMessage('Уведомления пока не разрешены')
+      setBusy(false)
     }
   }
 
-  const handleSkip = () => {
+  const later = () => {
     localStorage.setItem('permissions_denied', 'true')
     onComplete()
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-sm">
-        <div className="text-center">
-          <div className="text-5xl mb-6">🔔</div>
-          <h2 className="text-2xl font-bold mb-4">Разрешите уведомления</h2>
-          <p className="text-gray-600 mb-6">
-            Приложение будет напоминать вам о приеме лекарств.
-          </p>
-
-          {requested && granted && (
-            <p className="text-sm text-green-600 mb-6 font-semibold">
-              ✓ Спасибо! Уведомления включены.
-            </p>
-          )}
-
-          {requested && !granted && (
-            <p className="text-sm text-red-600 mb-6">
-              Разрешения не даны. Вы можете включить их в настройках позже.
-            </p>
-          )}
-
-          <div className="flex flex-col gap-3">
-            <Button
-              variant="primary"
-              className="w-full"
-              onClick={handleRequestPermission}
-              disabled={requested}
-            >
-              {requested ? (granted ? '✓ Готово' : '✗ Отказано') : 'Разрешить'}
-            </Button>
-            {!requested && (
-              <Button variant="secondary" className="w-full" onClick={handleSkip}>
-                Позже
-              </Button>
-            )}
+    <div className="reminder-overlay" role="dialog" aria-modal="true" aria-labelledby="permission-title">
+      <Card className="reminder-overlay__panel">
+        <div className="page-stack center">
+          <div className="reminder-bell" aria-hidden="true">🔔</div>
+          <div>
+            <h2 className="section-title" id="permission-title">Разрешить напоминания?</h2>
+            <p className="muted">Android покажет отдельный системный запрос. Нажмите «Разрешить», чтобы получать напоминания при закрытом приложении.</p>
           </div>
-
-          <p className="text-xs text-gray-500 mt-6">
-            Вы всегда можете изменить это в настройках.
-          </p>
+          {message && <div className="status-strip" role="status">{message}</div>}
+          <Button variant="primary" className="ui-button--full" onClick={() => void request()} disabled={busy}>
+            Разрешить уведомления
+          </Button>
+          <Button variant="secondary" className="ui-button--full" onClick={later} disabled={busy}>
+            Сделать позже
+          </Button>
         </div>
       </Card>
     </div>

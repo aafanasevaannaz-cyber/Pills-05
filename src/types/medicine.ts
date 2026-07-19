@@ -3,7 +3,14 @@ export interface Medicine {
   name: string
   dosage: string
   frequency: 'daily' | 'every_other' | 'as_needed'
-  scheduleType: 'morning' | 'evening' | 'twice' | 'three_times' | 'custom'
+  scheduleType:
+    | 'morning'
+    | 'afternoon'
+    | 'evening'
+    | 'night'
+    | 'twice'
+    | 'three_times'
+    | 'custom'
   customTimes?: string[]
   endDate?: Date
   createdAt: Date

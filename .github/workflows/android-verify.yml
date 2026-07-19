@@ -31,7 +31,6 @@ jobs:
         run: npm install
 
       - name: TypeScript check
-        id: typecheck
         shell: bash
         run: |
           set +e
@@ -70,9 +69,22 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
+        shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          set +e
+          ./gradlew assembleDebug > ../gradle-build.log 2>&1
+          status=$?
+          tail -n 120 ../gradle-build.log
+          exit $status
+
+      - name: Upload Gradle diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-05-gradle-log
+          path: gradle-build.log
+          if-no-files-found: ignore
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

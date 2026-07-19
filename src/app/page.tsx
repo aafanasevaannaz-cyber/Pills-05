@@ -14,49 +14,44 @@ export default function Home() {
   const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
-    // Инициализация Capacitor для Android
-    initializeCapacitor()
+    let mounted = true
 
-    // Определить платформу
-    const platform = isCapacitorAvailable() ? 'android' : 'web'
-    useRemindersStore.getState().setPlatform(platform as any)
+    const initialize = async () => {
+      await initializeCapacitor()
 
-    // Загрузить настройки
-    useSettingsStore.getState().loadFromDB()
+      const platform = isCapacitorAvailable() ? 'android' : 'web'
+      useRemindersStore.getState().setPlatform(platform)
 
-    // Загрузить данные из localStorage
-    useMedicinesStore.getState().loadFromDB()
-    const historyData = localStorage.getItem('history')
-    if (historyData) {
-      try {
-        const entries = JSON.parse(historyData)
-        const store = useHistoryStore.getState()
-        entries.forEach((entry: any) => store.addEntry(entry))
-      } catch (e) {
-        console.log('History load error')
-      }
-    }
+      useSettingsStore.getState().loadFromDB()
+      useMedicinesStore.getState().loadFromDB()
+      useHistoryStore.getState().loadFromDB()
 
-    // Синхронизировать напоминания с native notifications (если Android)
-    if (platform === 'android') {
       const medicines = useMedicinesStore.getState().medicines
-      medicines.forEach((medicine) => {
-        useRemindersStore.getState().syncReminderForMedicine(medicine)
-      })
+      useRemindersStore.getState().generateFromMedicines(medicines)
 
-      // Показать экран разрешений при первом запуске
-      const permissionsShown = localStorage.getItem('permissions_shown')
-      if (!permissionsShown) {
-        setShowPermissions(true)
+      if (platform === 'android') {
+        await Promise.allSettled(
+          medicines.map((medicine) =>
+            useRemindersStore.getState().syncReminderForMedicine(medicine)
+          )
+        )
+
+        if (!localStorage.getItem('permissions_shown') && mounted) {
+          setShowPermissions(true)
+        }
       }
+
+      if (mounted) setInitialized(true)
     }
 
-    setInitialized(true)
+    void initialize()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  if (!initialized) {
-    return null // Загрузка
-  }
+  if (!initialized) return null
 
   return (
     <>

@@ -1,27 +1,38 @@
-import React from 'react'
+import React, { useId } from 'react'
 
-interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
+  help?: string
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
   error,
+  help,
   className = '',
+  id,
   ...props
 }) => {
+  const generatedId = useId()
+  const inputId = id ?? generatedId
+  const descriptionId = error || help ? `${inputId}-description` : undefined
+
   return (
-    <div className="mb-4">
-      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
+    <div className="ui-field">
+      {label && <label className="ui-label" htmlFor={inputId}>{label}</label>}
       <input
-        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-          error ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-        } ${className}`}
+        id={inputId}
+        className={`ui-input ${className}`.trim()}
+        aria-invalid={Boolean(error)}
+        aria-describedby={descriptionId}
         {...props}
       />
-      {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+      {error ? (
+        <p className="ui-error" id={descriptionId}>{error}</p>
+      ) : help ? (
+        <p className="ui-help" id={descriptionId}>{help}</p>
+      ) : null}
     </div>
   )
 }

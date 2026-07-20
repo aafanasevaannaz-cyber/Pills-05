@@ -3,9 +3,13 @@ import { playSound, stopSound } from './player'
 import { getMedicineReminder, speakText, stopSpeaking } from './synthesizer'
 import {
   getReminderChannelId,
+  getReminderResource,
   getReminderSoundOption,
+  getReminderVolumeOption,
+  getReminderWebUrl,
   getVoiceRateValue,
   type ReminderSound,
+  type ReminderVolume,
   type VoiceRate,
 } from './options'
 
@@ -13,6 +17,12 @@ interface ReminderAudioPlugin {
   playSound(options: { resource: string; volume?: number }): Promise<{ playing: boolean }>
   speak(options: { text: string; rate?: number }): Promise<{ speaking: boolean }>
   stop(): Promise<void>
+  ensureAlarmChannel(options: {
+    channelId: string
+    channelName: string
+    description: string
+    resource: string
+  }): Promise<void>
   openNotificationChannelSettings(options: { channelId: string }): Promise<void>
 }
 
@@ -23,16 +33,17 @@ const wait = (milliseconds: number) =>
 
 export async function previewReminderSound(
   sound: ReminderSound,
-  volume = 1
+  volume: ReminderVolume = 'maximum'
 ): Promise<void> {
-  const option = getReminderSoundOption(sound)
+  const resource = getReminderResource(sound, volume)
+  const gain = getReminderVolumeOption(volume).gain
 
   if (Capacitor.isNativePlatform()) {
-    await NativeReminderAudio.playSound({ resource: option.resource, volume })
+    await NativeReminderAudio.playSound({ resource, volume: gain })
     return
   }
 
-  await playSound(option.webUrl, volume)
+  await playSound(getReminderWebUrl(sound, volume), gain)
 }
 
 export async function previewReminderVoice(
@@ -40,7 +51,7 @@ export async function previewReminderVoice(
   dosage: string,
   rate: VoiceRate
 ): Promise<void> {
-  const text = getMedicineReminder(medicineName, dosage)
+  const text = getMedicineReminder(medicineName, dosage || undefined)
   const numericRate = getVoiceRateValue(rate)
 
   if (Capacitor.isNativePlatform()) {
@@ -53,17 +64,34 @@ export async function previewReminderVoice(
 
 export async function previewFullReminder(options: {
   sound: ReminderSound
+  volume: ReminderVolume
   voiceEnabled: boolean
   voiceRate: VoiceRate
   medicineName: string
   dosage: string
 }): Promise<void> {
   await stopReminderPreview()
-  await previewReminderSound(options.sound, 1)
+  await previewReminderSound(options.sound, options.volume)
 
   if (!options.voiceEnabled || typeof window === 'undefined') return
   await wait(getReminderSoundOption(options.sound).previewDelayMs)
   await previewReminderVoice(options.medicineName, options.dosage, options.voiceRate)
+}
+
+export async function ensureNativeReminderChannel(
+  sound: ReminderSound,
+  volume: ReminderVolume
+): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false
+  const soundOption = getReminderSoundOption(sound)
+  const volumeOption = getReminderVolumeOption(volume)
+  await NativeReminderAudio.ensureAlarmChannel({
+    channelId: getReminderChannelId(sound, volume),
+    channelName: `Лекарства — ${soundOption.title}, ${volumeOption.title.toLowerCase()}`,
+    description: 'Громкие напоминания о приёме лекарств через аудиопоток будильника.',
+    resource: getReminderResource(sound, volume),
+  })
+  return true
 }
 
 export async function stopReminderPreview(): Promise<void> {
@@ -75,11 +103,12 @@ export async function stopReminderPreview(): Promise<void> {
 }
 
 export async function openAndroidReminderSoundSettings(
-  sound: ReminderSound
+  sound: ReminderSound,
+  volume: ReminderVolume
 ): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false
   await NativeReminderAudio.openNotificationChannelSettings({
-    channelId: getReminderChannelId(sound),
+    channelId: getReminderChannelId(sound, volume),
   })
   return true
 }

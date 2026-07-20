@@ -3,8 +3,12 @@
 import React, { useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useSettingsStore } from '@/features/settings/store'
-import { playReminderChime, stopSound } from '@/features/sound/player'
-import { getMedicineReminder, speakText, stopSpeaking } from '@/features/sound/synthesizer'
+import {
+  previewReminderSound,
+  previewReminderVoice,
+  stopReminderPreview,
+} from '@/features/sound/nativeAudio'
+import { getReminderSoundOption } from '@/features/sound/options'
 
 interface ReminderScreenProps {
   medicineName: string
@@ -24,25 +28,36 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
   onDelayed,
 }) => {
   const soundEnabled = useSettingsStore((state) => state.soundEnabled)
+  const soundChoice = useSettingsStore((state) => state.soundChoice)
   const voiceEnabled = useSettingsStore((state) => state.voiceEnabled)
+  const voiceRate = useSettingsStore((state) => state.voiceRate)
 
   useEffect(() => {
-    if (soundEnabled) void playReminderChime(1)
-    if (voiceEnabled) {
-      void speakText(getMedicineReminder(medicineName, dosage), 'ru-RU').catch((error) => {
-        console.error('Voice reminder failed:', error)
+    let voiceTimer: number | undefined
+
+    if (soundEnabled) {
+      void previewReminderSound(soundChoice, 1).catch((error) => {
+        console.error('Reminder sound failed:', error)
       })
     }
 
-    return () => {
-      stopSound()
-      stopSpeaking()
+    if (voiceEnabled) {
+      const delay = soundEnabled ? getReminderSoundOption(soundChoice).previewDelayMs : 100
+      voiceTimer = window.setTimeout(() => {
+        void previewReminderVoice(medicineName, dosage, voiceRate).catch((error) => {
+          console.error('Voice reminder failed:', error)
+        })
+      }, delay)
     }
-  }, [dosage, medicineName, soundEnabled, voiceEnabled])
+
+    return () => {
+      if (voiceTimer) window.clearTimeout(voiceTimer)
+      void stopReminderPreview()
+    }
+  }, [dosage, medicineName, soundChoice, soundEnabled, voiceEnabled, voiceRate])
 
   const finish = (action: () => void) => {
-    stopSound()
-    stopSpeaking()
+    void stopReminderPreview()
     action()
   }
 

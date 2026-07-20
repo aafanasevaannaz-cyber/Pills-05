@@ -1,0 +1,150 @@
+.status-strip--success {
+  background: var(--success-soft);
+  border-color: var(--success);
+}
+
+.status-strip--warning {
+  background: var(--warning-soft);
+  border-color: var(--warning);
+}
+
+.status-strip--danger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.progress-missed {
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.medicine-copy {
+  min-width: 0;
+}
+
+.sound-page {
+  max-width: 980px;
+}
+
+.sound-preview-card {
+  text-align: center;
+  padding-block: 24px;
+}
+
+.sound-preview-name {
+  margin: 2px 0 0;
+  font-size: clamp(2rem, 10vw, 3.8rem);
+  line-height: 1;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.sound-preview-dose {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1.08rem;
+}
+
+.sound-main-preview {
+  margin-top: 8px;
+  min-height: calc(var(--tap-size) + 12px);
+  font-size: 1.12rem;
+}
+
+.sound-option-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.sound-option {
+  appearance: none;
+  width: 100%;
+  min-height: calc(var(--tap-size) + 8px);
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  padding: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sound-option:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.sound-option.is-selected {
+  border-width: 3px;
+  border-color: var(--primary);
+  background: var(--success-soft);
+}
+
+.sound-option__icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--surface-strong);
+  font-size: 1.45rem;
+}
+
+.sound-option__text {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.sound-option__text strong {
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.sound-option__text span {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.sound-option__check {
+  font-size: 1.25rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .sound-option-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sound-option {
+    grid-template-columns: 1fr;
+    align-content: start;
+    text-align: center;
+    min-height: 190px;
+  }
+
+  .sound-option__icon {
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  [data-text-size='extra-large'] .sound-option {
+    grid-template-columns: 42px minmax(0, 1fr) 26px;
+    gap: 9px;
+    padding-inline: 11px;
+  }
+
+  [data-text-size='extra-large'] .sound-option__icon {
+    width: 40px;
+    height: 40px;
+  }
+}

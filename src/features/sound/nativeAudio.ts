@@ -155,6 +155,7 @@ export async function previewFullReminder(options: {
   voiceEnabled?: boolean
   voiceMode?: VoiceMode
   voiceVolume?: ReminderVolume
+  customVoiceVolume?: ReminderVolume
   voiceRate: VoiceRate
   customVoicePath?: string
   medicineName: string
@@ -169,7 +170,10 @@ export async function previewFullReminder(options: {
   await wait(getReminderSoundOption(options.sound).previewDelayMs)
   if (voiceMode === 'recorded') {
     if (!options.customVoicePath) throw new Error('Сначала запишите свой голос')
-    await previewCustomVoice(options.customVoicePath, options.voiceVolume ?? 'maximum')
+    await previewCustomVoice(
+      options.customVoicePath,
+      options.customVoiceVolume ?? options.voiceVolume ?? 'maximum'
+    )
     return
   }
 

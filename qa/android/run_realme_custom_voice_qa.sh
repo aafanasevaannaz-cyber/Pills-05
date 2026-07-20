@@ -161,13 +161,15 @@ for required in \
   "Голос после сигнала" \
   "Русский голос Android" \
   "Мой записанный голос" \
-  "Громкость голоса"; do
+  "Громкость русского голоса"; do
   contains_text "${XML_DIR}/03-per-medicine-sound.xml" "$required" \
     || fail "На экране лекарства отсутствует «${required}»"
 done
 
 if tap_text_scroll "Мой записанный голос" 10; then
   capture "04-custom-voice-selected"
+  contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Громкость своей записи" \
+    || fail "У собственной записи нет отдельного ползунка громкости"
   contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Начать запись" \
     || fail "Режим своего голоса не остался выбранным"
 fi
@@ -178,13 +180,14 @@ grep -F 'startVoiceRecording' android/app/src/main/java/com/pills/reminder/Remin
   || fail "Нативный MediaRecorder не подключён"
 grep -F 'playRecordedVoice' android/app/src/main/java/com/pills/reminder/ReminderAudioPlugin.java >/dev/null \
   || fail "Нативное воспроизведение своей записи не подключено"
+grep -F 'customVoiceVolume' src/components/screens/AddMedicineScreen.tsx >/dev/null \
+  || fail "Отдельная громкость собственной записи не сохраняется"
 grep -F 'voiceVolume' src/features/reminders/nativeNotifications.logic.ts >/dev/null \
-  || fail "Отдельная громкость голоса не передаётся в фоновое напоминание"
+  || fail "Громкость выбранного голоса не передаётся в фоновое напоминание"
 grep -F 'setStreamVolume(AudioManager.STREAM_ALARM' android/app/src/main/java/com/pills/reminder/ReminderVoiceService.java >/dev/null \
   || fail "Фоновое напоминание не управляет громкостью будильника"
 
 tap_text_scroll "Русский голос Android" 10 || true
-tap_text_scroll "Максимальная" 10 || true
 adb logcat -c
 tap_text_scroll "Быстро проверить всё напоминание" 14 || true
 sleep 10
@@ -218,12 +221,13 @@ else
 fi
 
 {
-  echo "# realme C55 Android 12 — focused volume and custom voice QA"
+  echo "# realme C55 Android 12 — three-volume and custom voice QA"
   echo
   echo "- Ошибок сценария: ${FAILURES}"
   echo "- APK установлен и приложение запущено"
-  echo "- Отдельная громкость сигнала отображается"
-  echo "- Отдельная громкость голоса отображается"
+  echo "- Ползунок громкости сигнала отображается"
+  echo "- Ползунок громкости русского голоса отображается"
+  echo "- Отдельный ползунок громкости своей записи отображается"
   echo "- Режим своей записи выбирается и не сбрасывается"
   echo "- Нативная запись и воспроизведение своей записи присутствуют в Android-сборке"
   echo "- Максимальный сигнал запускается через поток будильника"

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
+import { VolumeSlider } from '@/components/ui/VolumeSlider'
 import { useAddMedicineUI } from '@/features/medicines/uiStore'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useRemindersStore } from '@/features/reminders/store'
@@ -20,9 +21,7 @@ import {
 } from '@/features/sound/nativeAudio'
 import {
   reminderSoundOptions,
-  reminderVolumeOptions,
   type ReminderSound,
-  type ReminderVolume,
   type VoiceMode,
   type VoiceRate,
 } from '@/features/sound/options'
@@ -73,6 +72,7 @@ export const AddMedicineScreen: React.FC = () => {
     voiceEnabled,
     voiceMode,
     voiceVolume,
+    customVoiceVolume,
     voiceRate,
     customVoicePath,
     showDuplicate,
@@ -88,6 +88,7 @@ export const AddMedicineScreen: React.FC = () => {
     setVoiceEnabled,
     setVoiceMode,
     setVoiceVolume,
+    setCustomVoiceVolume,
     setVoiceRate,
     setCustomVoicePath,
     setShowDuplicate,
@@ -160,6 +161,7 @@ export const AddMedicineScreen: React.FC = () => {
         voiceEnabled,
         voiceMode,
         voiceVolume,
+        customVoiceVolume,
         voiceRate,
         customVoicePath,
         medicineName: name.trim() || 'Лекарство',
@@ -169,7 +171,7 @@ export const AddMedicineScreen: React.FC = () => {
         voiceMode === 'off'
           ? 'Так прозвучит выбранный сигнал без голоса.'
           : voiceMode === 'recorded'
-            ? 'Так прозвучат сигнал и ваша запись.'
+            ? 'Так прозвучат сигнал и ваша запись с отдельной громкостью.'
             : 'Так прозвучат сигнал и русский голос.'
       )
     } catch (error) {
@@ -222,8 +224,8 @@ export const AddMedicineScreen: React.FC = () => {
     setMessage('')
     try {
       await stopReminderPreview()
-      await previewCustomVoice(customVoicePath, voiceVolume)
-      setMessage('Ваша запись воспроизведена с выбранной громкостью голоса.')
+      await previewCustomVoice(customVoicePath, customVoiceVolume)
+      setMessage('Ваша запись воспроизведена с отдельной выбранной громкостью.')
     } catch (error) {
       console.error('Custom voice preview failed:', error)
       setMessage('Не удалось воспроизвести запись. Попробуйте записать её заново.')
@@ -296,7 +298,8 @@ export const AddMedicineScreen: React.FC = () => {
       reminderVolume: volumeChoice,
       voiceEnabled: voiceMode !== 'off',
       voiceMode,
-      voiceVolume,
+      voiceVolume: voiceMode === 'recorded' ? customVoiceVolume : voiceVolume,
+      customVoiceVolume,
       voiceRate,
       customVoicePath: voiceMode === 'recorded' ? customVoicePath : undefined,
       createdAt: new Date(),
@@ -306,7 +309,7 @@ export const AddMedicineScreen: React.FC = () => {
 
     try {
       await syncReminderForMedicine(newMedicine)
-      setMessage('Лекарство, громкость и голос сохранены')
+      setMessage('Лекарство, три настройки громкости и голос сохранены')
       window.setTimeout(() => {
         reset()
         router.replace('/')
@@ -468,7 +471,7 @@ export const AddMedicineScreen: React.FC = () => {
             <div>
               <h2 className="section-title">Как должно звучать напоминание?</h2>
               <p className="muted">
-                Сигнал, его громкость и голос сохранятся именно для лекарства «{name.trim() || 'Лекарство'}».
+                Сигнал, русский голос и ваша запись имеют отдельную громкость для лекарства «{name.trim() || 'Лекарство'}».
               </p>
             </div>
 
@@ -499,25 +502,13 @@ export const AddMedicineScreen: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <h3 className="ui-label">Громкость сигнала</h3>
-              <div className="choice-grid" role="radiogroup" aria-label="Громкость сигнала лекарства">
-                {reminderVolumeOptions.map((option) => (
-                  <label className={`choice${volumeChoice === option.id ? ' is-selected' : ''}`} key={option.id}>
-                    <input
-                      type="radio"
-                      name="medicine-volume"
-                      checked={volumeChoice === option.id}
-                      onChange={() => setVolumeChoice(option.id as ReminderVolume)}
-                    />
-                    <span className="choice__text">
-                      <span className="choice__title">{option.title}</span>
-                      <span className="choice__description">{option.description}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <VolumeSlider
+              id="medicine-signal-volume"
+              label="Громкость сигнала"
+              value={volumeChoice}
+              onChange={setVolumeChoice}
+              help="Первый ползунок: звонок или будильник перед голосом."
+            />
 
             <div>
               <h3 className="ui-label">Голос после сигнала</h3>
@@ -543,49 +534,37 @@ export const AddMedicineScreen: React.FC = () => {
               </div>
             </div>
 
-            {voiceMode !== 'off' && (
-              <div>
-                <h3 className="ui-label">Громкость голоса</h3>
-                <div className="choice-grid" role="radiogroup" aria-label="Громкость голоса лекарства">
-                  {reminderVolumeOptions.map((option) => (
-                    <label className={`choice${voiceVolume === option.id ? ' is-selected' : ''}`} key={option.id}>
-                      <input
-                        type="radio"
-                        name="medicine-voice-volume"
-                        checked={voiceVolume === option.id}
-                        onChange={() => setVoiceVolume(option.id as ReminderVolume)}
-                      />
-                      <span className="choice__text">
-                        <span className="choice__title">{option.title}</span>
-                        <span className="choice__description">Только для голоса</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {voiceMode === 'android' && (
-              <div>
-                <h3 className="ui-label">Скорость русского голоса</h3>
-                <div className="choice-grid" role="radiogroup" aria-label="Скорость голоса лекарства">
-                  {[
-                    { id: 'slow', title: 'Медленно', description: 'Отчётливо произносит название' },
-                    { id: 'normal', title: 'Обычно', description: 'Произносит быстрее' },
-                  ].map((option) => (
-                    <label className={`choice${voiceRate === option.id ? ' is-selected' : ''}`} key={option.id}>
-                      <input
-                        type="radio"
-                        name="medicine-voice-rate"
-                        checked={voiceRate === option.id}
-                        onChange={() => setVoiceRate(option.id as VoiceRate)}
-                      />
-                      <span className="choice__text">
-                        <span className="choice__title">{option.title}</span>
-                        <span className="choice__description">{option.description}</span>
-                      </span>
-                    </label>
-                  ))}
+              <div className="page-stack">
+                <VolumeSlider
+                  id="medicine-android-voice-volume"
+                  label="Громкость русского голоса"
+                  value={voiceVolume}
+                  onChange={setVoiceVolume}
+                  help="Второй ползунок: только голос Android, сигнал он не меняет."
+                />
+
+                <div>
+                  <h3 className="ui-label">Скорость русского голоса</h3>
+                  <div className="choice-grid" role="radiogroup" aria-label="Скорость голоса лекарства">
+                    {[
+                      { id: 'slow', title: 'Медленно', description: 'Отчётливо произносит название' },
+                      { id: 'normal', title: 'Обычно', description: 'Произносит быстрее' },
+                    ].map((option) => (
+                      <label className={`choice${voiceRate === option.id ? ' is-selected' : ''}`} key={option.id}>
+                        <input
+                          type="radio"
+                          name="medicine-voice-rate"
+                          checked={voiceRate === option.id}
+                          onChange={() => setVoiceRate(option.id as VoiceRate)}
+                        />
+                        <span className="choice__text">
+                          <span className="choice__title">{option.title}</span>
+                          <span className="choice__description">{option.description}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -600,6 +579,15 @@ export const AddMedicineScreen: React.FC = () => {
                       Запись хранится только внутри приложения.
                     </p>
                   </div>
+
+                  <VolumeSlider
+                    id="medicine-recorded-voice-volume"
+                    label="Громкость своей записи"
+                    value={customVoiceVolume}
+                    onChange={setCustomVoiceVolume}
+                    disabled={recording}
+                    help="Третий отдельный ползунок: меняет только записанный вами голос."
+                  />
 
                   {recording ? (
                     <>

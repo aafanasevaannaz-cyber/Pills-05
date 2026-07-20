@@ -43,6 +43,11 @@ type Dose = {
   scheduledFor: Date
 }
 
+type ActionMessage = {
+  text: string
+  tone: 'success' | 'warning' | 'danger'
+}
+
 export const MainScreen: React.FC = () => {
   const medicines = useMedicinesStore((state) => state.medicines)
   const history = useHistoryStore((state) => state.history)
@@ -51,7 +56,7 @@ export const MainScreen: React.FC = () => {
   const markSkipped = useRemindersStore((state) => state.markSkipped)
   const delayReminder = useRemindersStore((state) => state.delayReminder)
   const addEntry = useHistoryStore((state) => state.addEntry)
-  const [actionMessage, setActionMessage] = useState('')
+  const [actionMessage, setActionMessage] = useState<ActionMessage | null>(null)
   const now = new Date()
 
   useEffect(() => {
@@ -95,10 +100,12 @@ export const MainScreen: React.FC = () => {
           scheduled.getMinutes() === dose.scheduledFor.getMinutes()
       })?.status
 
-  const completed = todayDoses.filter((dose) => {
-    const status = statusForDose(dose)
-    return status === 'taken' || status === 'skipped'
-  }).length
+  const takenCount = todayDoses.filter((dose) => statusForDose(dose) === 'taken').length
+  const skippedCount = todayDoses.filter((dose) => statusForDose(dose) === 'skipped').length
+  const pendingCount = Math.max(0, todayDoses.length - takenCount - skippedCount)
+  const takenPercent = todayDoses.length === 0
+    ? 0
+    : Math.round((takenCount / todayDoses.length) * 100)
 
   const nextDose =
     todayDoses.find((dose) => !statusForDose(dose) && dose.scheduledFor.getTime() >= Date.now()) ??
@@ -120,30 +127,30 @@ export const MainScreen: React.FC = () => {
     })
   }
 
-  const showMessage = (message: string) => {
-    setActionMessage(message)
-    window.setTimeout(() => setActionMessage(''), 2600)
+  const showMessage = (text: string, tone: ActionMessage['tone']) => {
+    setActionMessage({ text, tone })
+    window.setTimeout(() => setActionMessage(null), 2600)
   }
 
   const handleTaken = () => {
     if (!activeReminder) return
     addHistoryEntry('taken')
     markTaken(activeReminder.id)
-    showMessage('Приём отмечен')
+    showMessage('Приём отмечен как принятый', 'success')
   }
 
   const handleSkipped = () => {
     if (!activeReminder) return
     addHistoryEntry('skipped')
     markSkipped(activeReminder.id)
-    showMessage('Отмечено: не принято')
+    showMessage('Отмечено: лекарство не принято', 'danger')
   }
 
   const handleDelay = () => {
     if (!activeReminder) return
     addHistoryEntry('late')
     delayReminder(activeReminder.id)
-    showMessage('Напомним через 10 минут')
+    showMessage('Напомним через 10 минут', 'warning')
   }
 
   const formattedDate = new Intl.DateTimeFormat('ru-RU', {
@@ -166,22 +173,27 @@ export const MainScreen: React.FC = () => {
           </Link>
         </header>
 
-        {actionMessage && <div className="status-strip" role="status">✓ {actionMessage}</div>}
+        {actionMessage && (
+          <div className={`status-strip status-strip--${actionMessage.tone}`} role="status">
+            <span aria-hidden="true">
+              {actionMessage.tone === 'success' ? '✓' : actionMessage.tone === 'danger' ? '×' : '⏱'}
+            </span>
+            {actionMessage.text}
+          </div>
+        )}
 
         {medicines.length > 0 && (
           <Card className="progress-card ui-card--soft">
             <div className="progress-row">
               <div>
                 <strong>План на день</strong>
-                <div className="muted">Отмечено {completed} из {todayDoses.length}</div>
+                <div className="muted">Принято {takenCount} из {todayDoses.length}</div>
+                {skippedCount > 0 && <div className="progress-missed">Не принято: {skippedCount}</div>}
               </div>
-              <strong>{todayDoses.length === 0 ? '—' : `${Math.round((completed / todayDoses.length) * 100)}%`}</strong>
+              <strong>{todayDoses.length === 0 ? '—' : `${takenPercent}%`}</strong>
             </div>
-            <div className="progress-track" aria-hidden="true">
-              <div
-                className="progress-fill"
-                style={{ width: todayDoses.length === 0 ? '0%' : `${(completed / todayDoses.length) * 100}%` }}
-              />
+            <div className="progress-track" aria-label={`Принято ${takenCount} из ${todayDoses.length}`}>
+              <div className="progress-fill" style={{ width: `${takenPercent}%` }} />
             </div>
           </Card>
         )}
@@ -219,7 +231,7 @@ export const MainScreen: React.FC = () => {
                     >
                       <div className="medicine-row">
                         <div className="medicine-time">{dose.time}</div>
-                        <div>
+                        <div className="medicine-copy">
                           <h3 className="medicine-name">{dose.medicine.name}</h3>
                           <p className="medicine-details">
                             {formatDosage(dose.medicine.dosage)} · {formatFrequency(dose.medicine.frequency)}
@@ -246,14 +258,16 @@ export const MainScreen: React.FC = () => {
                 </div>
               </Card>
             ) : (
-              <Card className="ui-card--success">
-                <strong>На сегодня всё отмечено</strong>
-                <p className="muted">Историю приёма можно открыть в нижнем меню.</p>
+              <Card className={skippedCount > 0 ? 'ui-card--warning' : 'ui-card--success'}>
+                <strong>{skippedCount > 0 ? 'Ожидающих приёмов больше нет' : 'На сегодня всё принято'}</strong>
+                <p className="muted">
+                  Принято: {takenCount}. Не принято: {skippedCount}. Ожидает: {pendingCount}.
+                </p>
               </Card>
             )}
             <div className="quick-actions">
               <Link href="/medicines" className="ui-button ui-button--secondary">Все лекарства</Link>
-              <Link href="/settings" className="ui-button ui-button--secondary">Проверить звук</Link>
+              <Link href="/sound" className="ui-button ui-button--secondary">Проверить звук</Link>
             </div>
           </aside>
         </div>

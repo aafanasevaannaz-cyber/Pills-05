@@ -20,6 +20,7 @@ interface AddMedicineUIStore {
   voiceEnabled: boolean
   voiceMode: VoiceMode
   voiceVolume: ReminderVolume
+  customVoiceVolume: ReminderVolume
   voiceRate: VoiceRate
   customVoicePath: string
   showDuplicate: boolean
@@ -36,6 +37,7 @@ interface AddMedicineUIStore {
   setVoiceEnabled: (enabled: boolean) => void
   setVoiceMode: (mode: VoiceMode) => void
   setVoiceVolume: (volume: ReminderVolume) => void
+  setCustomVoiceVolume: (volume: ReminderVolume) => void
   setVoiceRate: (rate: VoiceRate) => void
   setCustomVoicePath: (path: string) => void
   setShowDuplicate: (show: boolean) => void
@@ -55,6 +57,7 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
   voiceEnabled: true,
   voiceMode: 'android',
   voiceVolume: 'maximum',
+  customVoiceVolume: 'maximum',
   voiceRate: 'slow',
   customVoicePath: '',
   showDuplicate: false,
@@ -79,6 +82,7 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
     voiceEnabled: voiceMode !== 'off',
   }),
   setVoiceVolume: (voiceVolume) => set({ voiceVolume }),
+  setCustomVoiceVolume: (customVoiceVolume) => set({ customVoiceVolume }),
   setVoiceRate: (voiceRate) => set({ voiceRate }),
   setCustomVoicePath: (customVoicePath) => set({ customVoicePath }),
   setShowDuplicate: (showDuplicate) => set({ showDuplicate }),
@@ -97,6 +101,7 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
       voiceEnabled: true,
       voiceMode: 'android',
       voiceVolume: 'maximum',
+      customVoiceVolume: 'maximum',
       voiceRate: 'slow',
       customVoicePath: '',
       showDuplicate: false,

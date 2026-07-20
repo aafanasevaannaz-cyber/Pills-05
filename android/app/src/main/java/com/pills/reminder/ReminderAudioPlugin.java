@@ -1,9 +1,13 @@
 package com.pills.reminder;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
@@ -23,11 +27,18 @@ public class ReminderAudioPlugin extends Plugin {
     private MediaPlayer mediaPlayer;
     private TextToSpeech textToSpeech;
 
+    private AudioAttributes alarmAttributes(int contentType) {
+        return new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(contentType)
+            .build();
+    }
+
     @PluginMethod
     public void playSound(PluginCall call) {
-        String requestedResource = call.getString("resource", "medicine_clear.wav");
+        String requestedResource = call.getString("resource", "medicine_alarm_maximum.wav");
         String resourceName = requestedResource == null
-            ? "medicine_clear"
+            ? "medicine_alarm_maximum"
             : requestedResource.replace(".wav", "").replace(".mp3", "");
         int resourceId = getContext().getResources().getIdentifier(
             resourceName,
@@ -45,12 +56,7 @@ public class ReminderAudioPlugin extends Plugin {
         try {
             AssetFileDescriptor descriptor = getContext().getResources().openRawResourceFd(resourceId);
             MediaPlayer player = new MediaPlayer();
-            player.setAudioAttributes(
-                new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            );
+            player.setAudioAttributes(alarmAttributes(AudioAttributes.CONTENT_TYPE_SONIFICATION));
             player.setDataSource(
                 descriptor.getFileDescriptor(),
                 descriptor.getStartOffset(),
@@ -62,21 +68,21 @@ public class ReminderAudioPlugin extends Plugin {
             float volume = (float) Math.max(0, Math.min(1, requestedVolume));
             player.setVolume(volume, volume);
             player.setOnCompletionListener(completedPlayer -> {
-                Log.i(TAG, "Native sound completed: " + resourceName);
+                Log.i(TAG, "Native alarm sound completed: " + resourceName);
                 completedPlayer.release();
                 if (mediaPlayer == completedPlayer) mediaPlayer = null;
             });
             player.prepare();
             player.start();
             mediaPlayer = player;
-            Log.i(TAG, "Native sound started: " + resourceName + ", volume=" + volume);
+            Log.i(TAG, "Native alarm sound started: " + resourceName + ", volume=" + volume);
 
             JSObject result = new JSObject();
             result.put("playing", true);
             result.put("resource", resourceName);
             call.resolve(result);
         } catch (Exception error) {
-            Log.e(TAG, "Native sound failed: " + resourceName, error);
+            Log.e(TAG, "Native alarm sound failed: " + resourceName, error);
             stopPlayer();
             call.reject("Не удалось воспроизвести сигнал", error);
         }
@@ -106,23 +112,71 @@ public class ReminderAudioPlugin extends Plugin {
             }
 
             textToSpeech.setSpeechRate(rate);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                textToSpeech.setAudioAttributes(
-                    new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                );
-                textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "medicine-reminder-preview");
-            } else {
-                textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null);
-            }
-            Log.i(TAG, "Russian voice started, rate=" + rate + ", text=" + text);
+            textToSpeech.setPitch(1.02f);
+            textToSpeech.setAudioAttributes(alarmAttributes(AudioAttributes.CONTENT_TYPE_SPEECH));
+            textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "medicine-reminder-preview");
+            Log.i(TAG, "Russian alarm-stream voice started, rate=" + rate + ", text=" + text);
 
             JSObject result = new JSObject();
             result.put("speaking", true);
             call.resolve(result);
         });
+    }
+
+    @PluginMethod
+    public void ensureAlarmChannel(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            call.resolve();
+            return;
+        }
+
+        String channelId = call.getString("channelId", "medicine-reminders-v7-alarm-maximum");
+        String channelName = call.getString("channelName", "Громкие напоминания о лекарствах");
+        String description = call.getString("description", "Напоминания о времени приёма лекарств");
+        String requestedResource = call.getString("resource", "medicine_alarm_maximum.wav");
+        String resourceName = requestedResource == null
+            ? "medicine_alarm_maximum"
+            : requestedResource.replace(".wav", "").replace(".mp3", "");
+
+        int resourceId = getContext().getResources().getIdentifier(
+            resourceName,
+            "raw",
+            getContext().getPackageName()
+        );
+        if (resourceId == 0) {
+            call.reject("Не найден сигнал для системного уведомления: " + resourceName);
+            return;
+        }
+
+        try {
+            NotificationManager manager = (NotificationManager) getContext()
+                .getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationChannel existing = manager.getNotificationChannel(channelId);
+            if (existing == null) {
+                NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    channelName,
+                    NotificationManager.IMPORTANCE_HIGH
+                );
+                channel.setDescription(description);
+                channel.enableVibration(true);
+                channel.setVibrationPattern(new long[] { 0, 450, 180, 450, 180, 650 });
+                channel.enableLights(true);
+                Uri soundUri = Uri.parse(
+                    "android.resource://" + getContext().getPackageName() + "/" + resourceId
+                );
+                channel.setSound(
+                    soundUri,
+                    alarmAttributes(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                );
+                manager.createNotificationChannel(channel);
+                Log.i(TAG, "Created alarm-stream notification channel=" + channelId);
+            }
+            call.resolve();
+        } catch (Exception error) {
+            Log.e(TAG, "Could not create alarm notification channel=" + channelId, error);
+            call.reject("Не удалось создать громкий канал уведомлений", error);
+        }
     }
 
     @PluginMethod
@@ -135,7 +189,7 @@ public class ReminderAudioPlugin extends Plugin {
 
     @PluginMethod
     public void openNotificationChannelSettings(PluginCall call) {
-        String channelId = call.getString("channelId", "medicine-reminders-v4-clear");
+        String channelId = call.getString("channelId", "medicine-reminders-v7-alarm-maximum");
         try {
             Intent intent;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

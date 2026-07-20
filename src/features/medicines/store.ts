@@ -36,9 +36,12 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
         ? 'recorded'
         : 'android'
 
-  const voiceVolume = isReminderVolume(medicine.voiceVolume)
+  const androidVoiceVolume = isReminderVolume(medicine.voiceVolume)
     ? medicine.voiceVolume
     : defaultVoiceVolume
+  const customVoiceVolume = isReminderVolume(medicine.customVoiceVolume)
+    ? medicine.customVoiceVolume
+    : androidVoiceVolume
 
   return {
     ...medicine,
@@ -51,10 +54,8 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
       : defaultReminderVolume,
     voiceEnabled: voiceMode !== 'off',
     voiceMode,
-    voiceVolume,
-    customVoiceVolume: isReminderVolume(medicine.customVoiceVolume)
-      ? medicine.customVoiceVolume
-      : voiceVolume,
+    voiceVolume: voiceMode === 'recorded' ? customVoiceVolume : androidVoiceVolume,
+    customVoiceVolume,
     voiceRate: isVoiceRate(medicine.voiceRate) ? medicine.voiceRate : 'slow',
     customVoicePath: typeof medicine.customVoicePath === 'string'
       ? medicine.customVoicePath

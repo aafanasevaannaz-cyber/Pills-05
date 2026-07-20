@@ -7,7 +7,7 @@ const items = [
   { href: '/', label: 'Сегодня', icon: '●' },
   { href: '/medicines', label: 'Лекарства', icon: '▦' },
   { href: '/history', label: 'История', icon: '✓' },
-  { href: '/settings', label: 'Настройки', icon: '⚙' },
+  { href: '/settings', label: 'Настройки', icon: '⚙', aliases: ['/sound'] },
 ]
 
 export function BottomNav() {
@@ -16,7 +16,9 @@ export function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Основные разделы">
       {items.map((item) => {
-        const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+        const active = item.href === '/'
+          ? pathname === '/'
+          : pathname.startsWith(item.href) || item.aliases?.some((alias) => pathname.startsWith(alias))
         return (
           <Link
             key={item.href}

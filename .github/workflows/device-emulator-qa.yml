@@ -153,9 +153,6 @@ jobs:
 
           "${ADB}" shell input keyevent 82 || true
 
-          # Android 12 uiautomator can briefly return a stale tree after closing the
-          # in-app permission screen. Retry XML capture and use a deterministic
-          # coordinate fallback for the visible top-right Add button.
           python3 - <<'PY'
           from pathlib import Path
           path = Path('qa/android/run_device_qa.sh')
@@ -173,6 +170,10 @@ jobs:
           text = text.replace(
               'if tap_text_once "+ Добавить" 0 || tap_text_once "Добавить" 0; then',
               'if tap_text_once "+ Добавить" 0 || tap_text_once "Добавить" 0 || { adb shell input tap $((WIDTH * 4 / 5)) $((HEIGHT / 12)); log_action "Резервное нажатие кнопки Добавить по координатам"; sleep 2; }; then'
+          )
+          text = text.replace(
+              'if tap_text_scroll "Очень большой"; then',
+              'adb shell input swipe $((WIDTH / 2)) $((HEIGHT * 4 / 5)) $((WIDTH / 2)) $((HEIGHT / 3)) 550\nlog_action "Прокрутка настройки крупного текста выше нижнего меню"\nsleep 2\nif tap_text_scroll "Очень большой"; then'
           )
           path.write_text(text)
           PY

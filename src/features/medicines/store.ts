@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import type { Medicine } from '@/types'
 import { formatDosage } from '@/lib/formatMedicine'
+import {
+  defaultReminderSound,
+  defaultReminderVolume,
+  isReminderSound,
+  isReminderVolume,
+  isVoiceRate,
+} from '@/features/sound/options'
 
 interface MedicinesStore {
   medicines: Medicine[]
@@ -21,6 +28,14 @@ const persistMedicines = (medicines: Medicine[]) => {
 const reviveMedicine = (medicine: Medicine): Medicine => ({
   ...medicine,
   dosage: formatDosage(String(medicine.dosage ?? '')),
+  reminderSound: isReminderSound(medicine.reminderSound)
+    ? medicine.reminderSound
+    : defaultReminderSound,
+  reminderVolume: isReminderVolume(medicine.reminderVolume)
+    ? medicine.reminderVolume
+    : defaultReminderVolume,
+  voiceEnabled: medicine.voiceEnabled !== false,
+  voiceRate: isVoiceRate(medicine.voiceRate) ? medicine.voiceRate : 'slow',
   createdAt: new Date(medicine.createdAt),
   endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
 })

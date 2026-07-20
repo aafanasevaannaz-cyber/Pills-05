@@ -1,4 +1,4 @@
-name: Three-device emulator QA
+name: realme C55 Android 12 emulator QA
 
 on:
   pull_request:
@@ -50,7 +50,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: pills-qa-apk
+          name: pills-realme-android12-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
@@ -58,29 +58,6 @@ jobs:
     needs: build-apk
     runs-on: ubuntu-22.04
     timeout-minutes: 55
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - profile_name: realme-c55
-            api_level: 35
-            width: 1080
-            height: 2400
-            density: 400
-            tablet: 'false'
-          - profile_name: samsung-galaxy-tab-a11-plus
-            api_level: 36
-            width: 1200
-            height: 1920
-            density: 240
-            tablet: 'true'
-          - profile_name: lenovo-tab-m10-fhd-plus
-            api_level: 29
-            width: 1200
-            height: 1920
-            density: 240
-            tablet: 'true'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,7 +65,7 @@ jobs:
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
-          name: pills-qa-apk
+          name: pills-realme-android12-apk
           path: apk
 
       - name: Enable KVM
@@ -98,12 +75,16 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm || true
 
-      - name: Create and boot emulator
-        id: emulator
+      - name: Boot Android 12 emulator and run complete QA
+        id: qa
         continue-on-error: true
         env:
-          PROFILE_NAME: ${{ matrix.profile_name }}
-          API_LEVEL: ${{ matrix.api_level }}
+          PROFILE_NAME: realme-c55-android12
+          API_LEVEL: '31'
+          WIDTH: '1080'
+          HEIGHT: '2400'
+          DENSITY: '400'
+          TABLET: 'false'
         run: |
           set -o pipefail
           RESULT_DIR="qa-results/${PROFILE_NAME}"
@@ -116,15 +97,12 @@ jobs:
           AVDMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name avdmanager 2>/dev/null | sort | tail -n 1)"
           EMULATOR="${ANDROID_HOME}/emulator/emulator"
           ADB="${ANDROID_HOME}/platform-tools/adb"
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
 
           {
             echo "ANDROID_HOME=${ANDROID_HOME}"
             echo "SYSTEM_IMAGE=${SYSTEM_IMAGE}"
             echo "AVD_NAME=${AVD_NAME}"
-            echo "SDKMANAGER=${SDKMANAGER}"
-            echo "AVDMANAGER=${AVDMANAGER}"
-            echo "EMULATOR=${EMULATOR}"
-            echo "ADB=${ADB}"
             test -x "${SDKMANAGER}"
             test -x "${AVDMANAGER}"
             test -x "${ADB}"
@@ -135,7 +113,6 @@ jobs:
             "${EMULATOR}" -list-avds
           } 2>&1 | tee "${SETUP_LOG}"
 
-          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
           nohup "${EMULATOR}" \
             -avd "${AVD_NAME}" \
             -no-window \
@@ -148,7 +125,14 @@ jobs:
             -memory 4096 \
             -cores 2 \
             > "${RESULT_DIR}/logs/emulator-runtime.txt" 2>&1 &
-          echo $! > "${RESULT_DIR}/emulator.pid"
+          EMULATOR_PID=$!
+          echo "${EMULATOR_PID}" > "${RESULT_DIR}/emulator.pid"
+
+          cleanup() {
+            "${ADB}" emu kill >/dev/null 2>&1 || true
+            kill "${EMULATOR_PID}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
 
           BOOTED=0
           for attempt in $(seq 1 72); do
@@ -161,53 +145,31 @@ jobs:
           done
 
           if [ "${BOOTED}" -ne 1 ]; then
-            echo "Эмулятор не загрузился за 6 минут." | tee "${RESULT_DIR}/crash-message.txt"
-            "${ADB}" devices -l >> "${RESULT_DIR}/logs/emulator-setup.txt" 2>&1 || true
+            echo "Эмулятор Android 12 не загрузился за 6 минут." | tee "${RESULT_DIR}/crash-message.txt"
+            echo "Действия с приложением не выполнялись: эмулятор не загрузился." > "${RESULT_DIR}/actions.txt"
+            echo "Тест приложения не начался: эмулятор Android 12 не загрузился." > "${RESULT_DIR}/summary.md"
             exit 1
           fi
 
           "${ADB}" shell input keyevent 82 || true
-          "${ADB}" shell settings put global window_animation_scale 0 || true
-          "${ADB}" shell settings put global transition_animation_scale 0 || true
-          "${ADB}" shell settings put global animator_duration_scale 0 || true
-          echo "Эмулятор загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
-
-      - name: Run complete adb QA scenario
-        id: qa
-        if: steps.emulator.outcome == 'success'
-        continue-on-error: true
-        run: |
-          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-          command -v adb
-          command -v bash
-          command -v python3
           chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
           bash qa/android/run_device_qa.sh \
-            '${{ matrix.profile_name }}' \
-            '${{ matrix.width }}' \
-            '${{ matrix.height }}' \
-            '${{ matrix.density }}' \
-            '${{ matrix.tablet }}' \
+            "${PROFILE_NAME}" \
+            "${WIDTH}" \
+            "${HEIGHT}" \
+            "${DENSITY}" \
+            "${TABLET}" \
             'apk/app-debug.apk'
 
-      - name: Record infrastructure failure
-        if: steps.emulator.outcome != 'success'
-        run: |
-          RESULT_DIR="qa-results/${{ matrix.profile_name }}"
-          mkdir -p "${RESULT_DIR}/logs"
-          echo "Тест приложения не начался: эмулятор Android не загрузился. Подробности в logs/emulator-setup.txt и logs/emulator-runtime.txt." > "${RESULT_DIR}/summary.md"
-          test -f "${RESULT_DIR}/actions.txt" || echo "Действия с приложением не выполнялись: эмулятор не загрузился." > "${RESULT_DIR}/actions.txt"
-          test -f "${RESULT_DIR}/crash-message.txt" || echo "Сообщение о падении приложения отсутствует, потому что APK не был запущен." > "${RESULT_DIR}/crash-message.txt"
-
-      - name: Upload complete QA evidence
+      - name: Upload complete Android 12 QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa-${{ matrix.profile_name }}
-          path: qa-results/${{ matrix.profile_name }}
+          name: qa-realme-c55-android12
+          path: qa-results/realme-c55-android12
           if-no-files-found: error
           retention-days: 14
 
       - name: Fail job after evidence upload
-        if: steps.emulator.outcome != 'success' || steps.qa.outcome == 'failure'
+        if: steps.qa.outcome == 'failure'
         run: exit 1

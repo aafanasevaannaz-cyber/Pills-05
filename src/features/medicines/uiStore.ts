@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   ReminderSound,
   ReminderVolume,
+  VoiceMode,
   VoiceRate,
 } from '@/features/sound/options'
 
@@ -17,7 +18,10 @@ interface AddMedicineUIStore {
   soundChoice: ReminderSound
   volumeChoice: ReminderVolume
   voiceEnabled: boolean
+  voiceMode: VoiceMode
+  voiceVolume: ReminderVolume
   voiceRate: VoiceRate
+  customVoicePath: string
   showDuplicate: boolean
   message: string
 
@@ -30,7 +34,10 @@ interface AddMedicineUIStore {
   setSoundChoice: (sound: ReminderSound) => void
   setVolumeChoice: (volume: ReminderVolume) => void
   setVoiceEnabled: (enabled: boolean) => void
+  setVoiceMode: (mode: VoiceMode) => void
+  setVoiceVolume: (volume: ReminderVolume) => void
   setVoiceRate: (rate: VoiceRate) => void
+  setCustomVoicePath: (path: string) => void
   setShowDuplicate: (show: boolean) => void
   setMessage: (msg: string) => void
   reset: () => void
@@ -46,7 +53,10 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
   soundChoice: 'alarm',
   volumeChoice: 'maximum',
   voiceEnabled: true,
+  voiceMode: 'android',
+  voiceVolume: 'maximum',
   voiceRate: 'slow',
+  customVoicePath: '',
   showDuplicate: false,
   message: '',
 
@@ -58,10 +68,19 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
   setDosage: (dosage) => set({ dosage }),
   setSoundChoice: (soundChoice) => set({ soundChoice }),
   setVolumeChoice: (volumeChoice) => set({ volumeChoice }),
-  setVoiceEnabled: (voiceEnabled) => set({ voiceEnabled }),
+  setVoiceEnabled: (voiceEnabled) => set({
+    voiceEnabled,
+    voiceMode: voiceEnabled ? 'android' : 'off',
+  }),
+  setVoiceMode: (voiceMode) => set({
+    voiceMode,
+    voiceEnabled: voiceMode !== 'off',
+  }),
+  setVoiceVolume: (voiceVolume) => set({ voiceVolume }),
   setVoiceRate: (voiceRate) => set({ voiceRate }),
-  setShowDuplicate: (show) => set({ showDuplicate: show }),
-  setMessage: (msg) => set({ message: msg }),
+  setCustomVoicePath: (customVoicePath) => set({ customVoicePath }),
+  setShowDuplicate: (showDuplicate) => set({ showDuplicate }),
+  setMessage: (message) => set({ message }),
 
   reset: () =>
     set({
@@ -74,7 +93,10 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
       soundChoice: 'alarm',
       volumeChoice: 'maximum',
       voiceEnabled: true,
+      voiceMode: 'android',
+      voiceVolume: 'maximum',
       voiceRate: 'slow',
+      customVoicePath: '',
       showDuplicate: false,
       message: '',
     }),

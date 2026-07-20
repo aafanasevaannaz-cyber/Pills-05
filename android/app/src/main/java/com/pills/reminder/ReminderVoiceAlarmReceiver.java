@@ -26,17 +26,22 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
         String medicineId = intent.getStringExtra("medicineId");
         String text = intent.getStringExtra("text");
         float rate = intent.getFloatExtra("rate", 0.72f);
+        String voiceMode = intent.getStringExtra("voiceMode");
+        float voiceVolume = intent.getFloatExtra("voiceVolume", 1f);
+        float alarmVolume = intent.getFloatExtra("alarmVolume", 1f);
+        int delayBeforeVoiceMs = intent.getIntExtra("delayBeforeVoiceMs", 4000);
+        String recordedVoicePath = intent.getStringExtra("recordedVoicePath");
         int repeatDays = intent.getIntExtra("repeatDays", 0);
         long previousTriggerAt = intent.getLongExtra("triggerAt", System.currentTimeMillis());
 
-        if (text == null || text.trim().isEmpty()) {
-            Log.e(TAG, "Voice alarm has no text, requestCode=" + requestCode);
-            return;
-        }
-
         Intent serviceIntent = new Intent(context, ReminderVoiceService.class);
-        serviceIntent.putExtra("text", text);
+        serviceIntent.putExtra("text", text == null ? "" : text);
         serviceIntent.putExtra("rate", rate);
+        serviceIntent.putExtra("voiceMode", voiceMode == null ? "android" : voiceMode);
+        serviceIntent.putExtra("voiceVolume", voiceVolume);
+        serviceIntent.putExtra("alarmVolume", alarmVolume);
+        serviceIntent.putExtra("delayBeforeVoiceMs", delayBeforeVoiceMs);
+        serviceIntent.putExtra("recordedVoicePath", recordedVoicePath == null ? "" : recordedVoicePath);
         serviceIntent.putExtra("requestCode", requestCode);
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -44,9 +49,9 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
             } else {
                 context.startService(serviceIntent);
             }
-            Log.i(TAG, "Started background Russian voice, requestCode=" + requestCode);
+            Log.i(TAG, "Started background reminder audio, requestCode=" + requestCode);
         } catch (Exception error) {
-            Log.e(TAG, "Could not start reminder voice service", error);
+            Log.e(TAG, "Could not start reminder audio service", error);
         }
 
         if (repeatDays > 0) {
@@ -62,8 +67,13 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
                 medicineId == null ? "" : medicineId,
                 next.getTimeInMillis(),
                 repeatDays,
-                text,
-                rate
+                text == null ? "" : text,
+                rate,
+                voiceMode == null ? "android" : voiceMode,
+                voiceVolume,
+                alarmVolume,
+                delayBeforeVoiceMs,
+                recordedVoicePath == null ? "" : recordedVoicePath
             );
         } else {
             removeStoredAlarm(context, requestCode);
@@ -77,7 +87,12 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
         long triggerAt,
         int repeatDays,
         String text,
-        float rate
+        float rate,
+        String voiceMode,
+        float voiceVolume,
+        float alarmVolume,
+        int delayBeforeVoiceMs,
+        String recordedVoicePath
     ) {
         AlarmManager manager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (manager == null) throw new IllegalStateException("AlarmManager unavailable");
@@ -89,7 +104,12 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
             triggerAt,
             repeatDays,
             text,
-            rate
+            rate,
+            voiceMode,
+            voiceVolume,
+            alarmVolume,
+            delayBeforeVoiceMs,
+            recordedVoicePath
         );
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -100,7 +120,7 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.canScheduleExactAlarms()) {
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent);
-            Log.w(TAG, "Exact alarm permission missing; scheduled best-effort voice alarm");
+            Log.w(TAG, "Exact alarm permission missing; scheduled best-effort reminder audio");
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent);
         } else {
@@ -111,7 +131,7 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
             .edit()
             .putString(KEY_PREFIX + requestCode, medicineId)
             .apply();
-        Log.i(TAG, "Scheduled voice alarm requestCode=" + requestCode + ", at=" + triggerAt);
+        Log.i(TAG, "Scheduled reminder audio requestCode=" + requestCode + ", at=" + triggerAt);
     }
 
     public static void cancelForMedicine(Context context, String medicineId) {
@@ -144,7 +164,12 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
         long triggerAt,
         int repeatDays,
         String text,
-        float rate
+        float rate,
+        String voiceMode,
+        float voiceVolume,
+        float alarmVolume,
+        int delayBeforeVoiceMs,
+        String recordedVoicePath
     ) {
         Intent intent = new Intent(context, ReminderVoiceAlarmReceiver.class);
         intent.setAction(ACTION);
@@ -154,6 +179,11 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
         intent.putExtra("repeatDays", repeatDays);
         intent.putExtra("text", text);
         intent.putExtra("rate", rate);
+        intent.putExtra("voiceMode", voiceMode);
+        intent.putExtra("voiceVolume", voiceVolume);
+        intent.putExtra("alarmVolume", alarmVolume);
+        intent.putExtra("delayBeforeVoiceMs", delayBeforeVoiceMs);
+        intent.putExtra("recordedVoicePath", recordedVoicePath);
         return intent;
     }
 

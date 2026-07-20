@@ -98,6 +98,7 @@ adb install -r "$APK_PATH" > "${LOG_DIR}/install.txt" 2>&1 || fail "APK не у�
 adb shell pm clear "$PACKAGE" >/dev/null 2>&1 || true
 adb shell cmd appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true
 adb shell cmd appops set "$PACKAGE" USE_EXACT_ALARM allow >/dev/null 2>&1 || true
+adb shell cmd appops set "$PACKAGE" RECORD_AUDIO allow >/dev/null 2>&1 || true
 adb logcat -c
 
 printf '%s\n' "$COMPONENT" > "${RESULT_ROOT}/resolved-activity.txt"
@@ -138,30 +139,54 @@ tap_text_scroll "08:00" 4 || true
 tap_text_scroll "Продолжить" 8 || true
 capture "05-sound-volume-voice"
 
-for required in "Как должно звучать напоминание" "Громкость" "Озвучить название голосом" "Быстро проверить звук и голос"; do
+for required in \
+  "Как должно звучать напоминание" \
+  "Громкость сигнала" \
+  "Голос после сигнала" \
+  "Русский голос Android" \
+  "Мой записанный голос" \
+  "Громкость голоса" \
+  "Быстро проверить всё напоминание"; do
   contains_text "${XML_DIR}/05-sound-volume-voice.xml" "$required" \
     || fail "На звуковом шаге отсутствует «${required}»"
 done
 
-tap_text_scroll "Максимальная" 6 || true
+grep -F 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml >/dev/null \
+  || fail "В AndroidManifest отсутствует разрешение микрофона"
+grep -F 'startVoiceRecording' android/app/src/main/java/com/pills/reminder/ReminderAudioPlugin.java >/dev/null \
+  || fail "Нативная запись своего голоса не подключена"
+grep -F 'voiceVolume' src/features/reminders/nativeNotifications.logic.ts >/dev/null \
+  || fail "Отдельная громкость голоса не передаётся в фоновое напоминание"
+
+if tap_text_scroll "Мой записанный голос" 8; then
+  sleep 2
+  capture "06-custom-voice-controls"
+  contains_text "${XML_DIR}/06-custom-voice-controls.xml" "Начать запись" \
+    || fail "После выбора своего голоса нет кнопки записи"
+fi
+
+tap_text_scroll "Русский голос Android" 8 || true
+tap_text_scroll "Максимальная" 8 || true
 adb logcat -c
-tap_text_scroll "Быстро проверить звук и голос" 8 || true
-sleep 9
+tap_text_scroll "Быстро проверить всё напоминание" 12 || true
+sleep 10
 adb logcat -d > "${LOG_DIR}/preview-logcat.txt" 2>&1 || true
 grep -F "Native alarm sound started: medicine_alarm_maximum" "${LOG_DIR}/preview-logcat.txt" >/dev/null \
   || fail "Максимальный сигнал не запустился через поток будильника"
 grep -F "Russian alarm-stream voice started" "${LOG_DIR}/preview-logcat.txt" >/dev/null \
   || fail "Русский голос не запустился через поток будильника"
-capture "06-preview-result"
+grep -F "Alarm stream volume set to" "${LOG_DIR}/preview-logcat.txt" >/dev/null \
+  || fail "Приложение не установило выбранную громкость будильника"
+capture "07-preview-result"
 
-tap_text_scroll "Продолжить" 8 || true
-capture "07-dosage"
+tap_text_scroll "Продолжить" 10 || true
+capture "08-dosage"
 tap_text_scroll "1 таблетка" 4 || true
 tap_text_scroll "Сохранить" 8 || true
 sleep 6
-capture "08-home-with-medicine"
-contains_text "${XML_DIR}/08-home-with-medicine.xml" "TestMed" || fail "Лекарство не появилось на главном экране"
-python3 qa/android/assert_realme_layout.py "${XML_DIR}/08-home-with-medicine.xml" \
+capture "09-home-with-medicine"
+contains_text "${XML_DIR}/09-home-with-medicine.xml" "TestMed" || fail "Лекарство не появилось на главном экране"
+python3 qa/android/assert_realme_layout.py "${XML_DIR}/09-home-with-medicine.xml" \
   --time "08:00" --medicine "TestMed" \
   > "${LOG_DIR}/layout-assertion.txt" 2>&1 || fail "Время и название накладываются"
 
@@ -175,26 +200,26 @@ fi
 
 if tap_text_scroll "Проверить звук" 8; then
   sleep 3
-  capture "09-sound-page"
+  capture "10-sound-page"
 fi
-contains_text "${XML_DIR}/09-sound-page.xml" "Громкость сигнала" || fail "Не открылась отдельная страница звука"
+contains_text "${XML_DIR}/10-sound-page.xml" "Громкость сигнала" || fail "Не открылась отдельная страница звука"
 
 adb logcat -c
 if tap_text_scroll "Проверить через 3 секунды" 12; then
   sleep 1
   adb shell input keyevent 3
-  sleep 13
+  sleep 14
   adb logcat -d > "${LOG_DIR}/closed-app-logcat.txt" 2>&1 || true
   adb shell dumpsys notification --noredact > "${LOG_DIR}/notification-dumpsys.txt" 2>&1 || true
-  grep -F "Scheduled voice alarm" "${LOG_DIR}/closed-app-logcat.txt" >/dev/null \
-    || fail "Голос для закрытого приложения не был запланирован"
+  grep -F "Scheduled reminder audio" "${LOG_DIR}/closed-app-logcat.txt" >/dev/null \
+    || fail "Фоновый звук и голос не были запланированы"
   grep -E "Background Russian voice started|Russian background TTS unavailable" "${LOG_DIR}/closed-app-logcat.txt" >/dev/null \
     || fail "Фоновая голосовая служба не запускалась"
-  grep -F "medicine-reminders-v7-" "${LOG_DIR}/notification-dumpsys.txt" >/dev/null \
-    || fail "Громкий канал уведомлений v7 не создан"
+  grep -F "medicine-reminders-v8-" "${LOG_DIR}/notification-dumpsys.txt" >/dev/null \
+    || fail "Громкий канал уведомлений v8 не создан"
   adb shell cmd statusbar expand-notifications >/dev/null 2>&1 || true
   sleep 2
-  capture "10-closed-app-notification"
+  capture "11-closed-app-notification"
   adb shell cmd statusbar collapse >/dev/null 2>&1 || true
 fi
 
@@ -219,11 +244,13 @@ else
 fi
 
 {
-  echo "# realme C55 Android 12 — final loud voice QA"
+  echo "# realme C55 Android 12 — per-medicine volume and custom voice QA"
   echo
   echo "- Ошибок сценария: ${FAILURES}"
-  echo "- Пустой экран без ложного прогресса проверен"
-  echo "- Пятишаговое добавление лекарства проверено"
+  echo "- Отдельная громкость сигнала проверена"
+  echo "- Отдельная громкость голоса проверена"
+  echo "- Интерфейс своей записи проверен"
+  echo "- Нативный MediaRecorder и разрешение микрофона проверены сборкой"
   echo "- Максимальный сигнал через поток будильника проверен"
   echo "- Русский голос при открытом приложении проверен"
   echo "- Планирование голоса при закрытом приложении проверено"

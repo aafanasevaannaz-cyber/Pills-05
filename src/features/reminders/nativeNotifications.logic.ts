@@ -12,12 +12,14 @@ import {
 import {
   defaultReminderSound,
   defaultReminderVolume,
+  defaultVoiceVolume,
   getReminderChannelId,
   getReminderResource,
   getReminderSoundOption,
   getReminderVolumeOption,
   type ReminderSound,
   type ReminderVolume,
+  type VoiceMode,
 } from '@/features/sound/options'
 import {
   addToCache,
@@ -36,27 +38,43 @@ const voiceRequestCode = (notificationId: number): number => {
   return code === 0 ? 611_000_001 : code
 }
 
-const scheduleVoiceForNotification = async (
+const getVoiceMode = (medicine: Medicine): VoiceMode => {
+  if (medicine.voiceMode === 'android' || medicine.voiceMode === 'recorded' || medicine.voiceMode === 'off') {
+    return medicine.voiceMode
+  }
+  if (medicine.voiceEnabled === false) return 'off'
+  return medicine.customVoicePath ? 'recorded' : 'android'
+}
+
+const scheduleAudioForNotification = async (
   notificationId: number,
   medicine: Medicine,
   triggerAt: Date,
   repeatDays: number,
-  soundChoice: ReminderSound
+  soundChoice: ReminderSound,
+  alarmVolume: ReminderVolume
 ): Promise<void> => {
-  if (medicine.voiceEnabled === false) return
-  const voiceTime = new Date(
-    triggerAt.getTime() + getReminderSoundOption(soundChoice).previewDelayMs + 250
-  )
+  const desiredLeadMs = 700
+  const availableLeadMs = Math.max(0, triggerAt.getTime() - Date.now() - 150)
+  const leadMs = Math.min(desiredLeadMs, availableLeadMs)
+  const serviceTime = new Date(triggerAt.getTime() - leadMs)
+  const delayBeforeVoiceMs = getReminderSoundOption(soundChoice).previewDelayMs + leadMs + 300
+
   await scheduleNativeVoiceAlarm({
     requestCode: voiceRequestCode(notificationId),
     medicineId: medicine.id,
-    triggerAt: voiceTime,
+    triggerAt: serviceTime,
     repeatDays,
     medicineName: medicine.name,
     dosage: formatDosage(medicine.dosage),
     voiceRate: medicine.voiceRate ?? 'slow',
+    voiceMode: getVoiceMode(medicine),
+    voiceVolume: medicine.voiceVolume ?? defaultVoiceVolume,
+    alarmVolume,
+    delayBeforeVoiceMs,
+    customVoicePath: medicine.customVoicePath,
   }).catch((error) => {
-    console.error('Background voice scheduling failed:', error)
+    console.error('Background reminder audio scheduling failed:', error)
   })
 }
 
@@ -156,8 +174,10 @@ const notificationBase = (
     time,
     soundChoice,
     volumeChoice,
-    voiceEnabled: medicine.voiceEnabled !== false,
+    voiceMode: getVoiceMode(medicine),
+    voiceVolume: medicine.voiceVolume ?? defaultVoiceVolume,
     voiceRate: medicine.voiceRate ?? 'slow',
+    hasCustomVoice: Boolean(medicine.customVoicePath),
   },
   autoCancel: true,
 })
@@ -186,7 +206,14 @@ const scheduleDailyNotification = async (
   next.setHours(hour, minute, 0, 0)
   if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1)
   addToCache(notificationId, medicine.id, time, next)
-  await scheduleVoiceForNotification(notificationId, medicine, next, 1, soundChoice)
+  await scheduleAudioForNotification(
+    notificationId,
+    medicine,
+    next,
+    1,
+    soundChoice,
+    volumeChoice
+  )
   return notificationId
 }
 
@@ -211,7 +238,14 @@ const scheduleOneTimeNotification = async (
   })
 
   addToCache(notificationId, medicine.id, time, scheduledTime)
-  await scheduleVoiceForNotification(notificationId, medicine, scheduledTime, 0, soundChoice)
+  await scheduleAudioForNotification(
+    notificationId,
+    medicine,
+    scheduledTime,
+    0,
+    soundChoice,
+    volumeChoice
+  )
   return notificationId
 }
 
@@ -233,7 +267,7 @@ export const scheduleTestNotification = async (
   const soundOption = getReminderSoundOption(soundChoice)
   const volumeOption = getReminderVolumeOption(volumeChoice)
   const notificationId = Math.floor(Date.now() % 2_000_000_000)
-  const triggerAt = new Date(Date.now() + 3000)
+  const triggerAt = new Date(Date.now() + 4000)
   await LocalNotifications.schedule({
     notifications: [
       {
@@ -250,18 +284,21 @@ export const scheduleTestNotification = async (
     ],
   })
 
+  const leadMs = 700
   await scheduleNativeVoiceAlarm({
     requestCode: voiceRequestCode(notificationId),
     medicineId: `__test__${notificationId}`,
-    triggerAt: new Date(
-      triggerAt.getTime() + getReminderSoundOption(soundChoice).previewDelayMs + 250
-    ),
+    triggerAt: new Date(triggerAt.getTime() - leadMs),
     repeatDays: 0,
     medicineName: 'Зенон',
     dosage: '1 таблетка',
     voiceRate: useSettingsStore.getState().voiceRate,
+    voiceMode: 'android',
+    voiceVolume: 'maximum',
+    alarmVolume: volumeChoice,
+    delayBeforeVoiceMs: getReminderSoundOption(soundChoice).previewDelayMs + leadMs + 300,
   }).catch((error) => {
-    console.error('Test voice scheduling failed:', error)
+    console.error('Test reminder audio scheduling failed:', error)
   })
   return true
 }

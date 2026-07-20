@@ -3,7 +3,12 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Medicine } from '@/types'
 import { formatDosage } from '@/lib/formatMedicine'
 import { useSettingsStore } from '@/features/settings/store'
-import { ensureNativeReminderChannel } from '@/features/sound/nativeAudio'
+import {
+  cancelAllNativeVoiceAlarms,
+  cancelNativeVoiceAlarmsForMedicine,
+  ensureNativeReminderChannel,
+  scheduleNativeVoiceAlarm,
+} from '@/features/sound/nativeAudio'
 import {
   defaultReminderSound,
   defaultReminderVolume,
@@ -25,6 +30,35 @@ export const isNativeNotificationsAvailable = (): boolean => Capacitor.isNativeP
 
 const selectedSound = (): ReminderSound => useSettingsStore.getState().soundChoice
 const selectedVolume = (): ReminderVolume => useSettingsStore.getState().volumeChoice
+
+const voiceRequestCode = (notificationId: number): number => {
+  const code = (Math.abs(notificationId) + 611_000_000) % 2_000_000_000
+  return code === 0 ? 611_000_001 : code
+}
+
+const scheduleVoiceForNotification = async (
+  notificationId: number,
+  medicine: Medicine,
+  triggerAt: Date,
+  repeatDays: number,
+  soundChoice: ReminderSound
+): Promise<void> => {
+  if (medicine.voiceEnabled === false) return
+  const voiceTime = new Date(
+    triggerAt.getTime() + getReminderSoundOption(soundChoice).previewDelayMs + 250
+  )
+  await scheduleNativeVoiceAlarm({
+    requestCode: voiceRequestCode(notificationId),
+    medicineId: medicine.id,
+    triggerAt: voiceTime,
+    repeatDays,
+    medicineName: medicine.name,
+    dosage: formatDosage(medicine.dosage),
+    voiceRate: medicine.voiceRate ?? 'slow',
+  }).catch((error) => {
+    console.error('Background voice scheduling failed:', error)
+  })
+}
 
 export const ensureReminderChannel = async (
   soundChoice: ReminderSound = selectedSound(),
@@ -152,6 +186,7 @@ const scheduleDailyNotification = async (
   next.setHours(hour, minute, 0, 0)
   if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1)
   addToCache(notificationId, medicine.id, time, next)
+  await scheduleVoiceForNotification(notificationId, medicine, next, 1, soundChoice)
   return notificationId
 }
 
@@ -176,6 +211,7 @@ const scheduleOneTimeNotification = async (
   })
 
   addToCache(notificationId, medicine.id, time, scheduledTime)
+  await scheduleVoiceForNotification(notificationId, medicine, scheduledTime, 0, soundChoice)
   return notificationId
 }
 
@@ -196,20 +232,36 @@ export const scheduleTestNotification = async (
   await ensureReminderChannel(soundChoice, volumeChoice)
   const soundOption = getReminderSoundOption(soundChoice)
   const volumeOption = getReminderVolumeOption(volumeChoice)
+  const notificationId = Math.floor(Date.now() % 2_000_000_000)
+  const triggerAt = new Date(Date.now() + 3000)
   await LocalNotifications.schedule({
     notifications: [
       {
-        id: Math.floor(Date.now() % 2_000_000_000),
+        id: notificationId,
         title: 'Проверка напоминания',
         body: `${soundOption.title}. Громкость: ${volumeOption.title.toLowerCase()}.`,
-        largeBody: 'Проверка сигнала при закрытом приложении и заблокированном экране.',
+        largeBody: 'Проверка сигнала и русского голоса при закрытом приложении.',
         sound: getReminderResource(soundChoice, volumeChoice),
         channelId: getReminderChannelId(soundChoice, volumeChoice),
         autoCancel: true,
-        schedule: { at: new Date(Date.now() + 3000), allowWhileIdle: true },
+        schedule: { at: triggerAt, allowWhileIdle: true },
         extra: { test: true, soundChoice, volumeChoice },
       },
     ],
+  })
+
+  await scheduleNativeVoiceAlarm({
+    requestCode: voiceRequestCode(notificationId),
+    medicineId: `__test__${notificationId}`,
+    triggerAt: new Date(
+      triggerAt.getTime() + getReminderSoundOption(soundChoice).previewDelayMs + 250
+    ),
+    repeatDays: 0,
+    medicineName: 'Зенон',
+    dosage: '1 таблетка',
+    voiceRate: useSettingsStore.getState().voiceRate,
+  }).catch((error) => {
+    console.error('Test voice scheduling failed:', error)
   })
   return true
 }
@@ -239,6 +291,7 @@ export const cancelAllNotificationsForMedicine = async (medicineId: string): Pro
       await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) })
       ids.forEach(removeFromCache)
     }
+    await cancelNativeVoiceAlarmsForMedicine(medicineId)
   } catch (error) {
     console.error('Cancel all notifications failed:', error)
   }
@@ -253,6 +306,7 @@ export const cancelAllNotifications = async (): Promise<void> => {
         notifications: pending.notifications.map((notification) => ({ id: notification.id })),
       })
     }
+    await cancelAllNativeVoiceAlarms()
   } catch (error) {
     console.error('Cancel all notifications failed:', error)
   }

@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from 'next'
 import '@/styles/globals.css'
 import '@/styles/realme-fixes.css'
+import '@/styles/reminders.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { BottomNav } from '@/components/BottomNav'
 
 export const metadata: Metadata = {
-  title: 'Мои лекарства',
+  title: 'Мои таблетки',
   description: 'Понятные напоминания о приёме лекарств',
 }
 

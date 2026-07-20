@@ -8,41 +8,47 @@ const sampleRate = 44_100
 const soundDefinitions = [
   {
     id: 'gentle',
-    durationSeconds: 2.3,
-    amplitude: 0.42,
+    durationSeconds: 2.5,
+    baseAmplitude: 0.62,
     bursts: [
-      { start: 0.0, duration: 0.48, frequency: 523.25 },
-      { start: 0.62, duration: 0.48, frequency: 659.25 },
-      { start: 1.34, duration: 0.62, frequency: 783.99 },
+      { start: 0.0, duration: 0.5, frequency: 523.25 },
+      { start: 0.68, duration: 0.5, frequency: 659.25 },
+      { start: 1.42, duration: 0.68, frequency: 783.99 },
     ],
   },
   {
     id: 'clear',
-    durationSeconds: 2.2,
-    amplitude: 0.62,
+    durationSeconds: 2.5,
+    baseAmplitude: 0.78,
     bursts: [
-      { start: 0.0, duration: 0.34, frequency: 880 },
-      { start: 0.48, duration: 0.34, frequency: 880 },
-      { start: 0.96, duration: 0.46, frequency: 1046.5 },
-      { start: 1.58, duration: 0.42, frequency: 880 },
+      { start: 0.0, duration: 0.38, frequency: 880 },
+      { start: 0.5, duration: 0.38, frequency: 880 },
+      { start: 1.0, duration: 0.5, frequency: 1046.5 },
+      { start: 1.68, duration: 0.48, frequency: 880 },
     ],
   },
   {
     id: 'alarm',
-    durationSeconds: 3.1,
-    amplitude: 0.78,
+    durationSeconds: 3.5,
+    baseAmplitude: 0.96,
     bursts: [
-      { start: 0.0, duration: 0.42, frequency: 988 },
-      { start: 0.48, duration: 0.42, frequency: 740 },
-      { start: 0.96, duration: 0.42, frequency: 988 },
-      { start: 1.44, duration: 0.42, frequency: 740 },
-      { start: 1.92, duration: 0.42, frequency: 988 },
-      { start: 2.4, duration: 0.5, frequency: 1175 },
+      { start: 0.0, duration: 0.46, frequency: 988 },
+      { start: 0.5, duration: 0.46, frequency: 740 },
+      { start: 1.0, duration: 0.46, frequency: 988 },
+      { start: 1.5, duration: 0.46, frequency: 740 },
+      { start: 2.0, duration: 0.46, frequency: 988 },
+      { start: 2.5, duration: 0.68, frequency: 1175 },
     ],
   },
 ]
 
-function createWave({ durationSeconds, amplitude, bursts }) {
+const volumeDefinitions = [
+  { id: 'normal', multiplier: 0.72, drive: 1.15 },
+  { id: 'loud', multiplier: 0.9, drive: 1.65 },
+  { id: 'maximum', multiplier: 1, drive: 2.35 },
+]
+
+function createWave({ durationSeconds, baseAmplitude, bursts }, volume) {
   const sampleCount = Math.floor(sampleRate * durationSeconds)
   const samples = new Int16Array(sampleCount)
 
@@ -54,15 +60,17 @@ function createWave({ durationSeconds, amplitude, bursts }) {
       const localTime = time - burst.start
       if (localTime < 0 || localTime > burst.duration) continue
 
-      const attack = Math.min(1, localTime / 0.025)
-      const release = Math.min(1, (burst.duration - localTime) / 0.12)
+      const attack = Math.min(1, localTime / 0.018)
+      const release = Math.min(1, (burst.duration - localTime) / 0.11)
       const envelope = Math.max(0, Math.min(attack, release))
       const fundamental = Math.sin(2 * Math.PI * burst.frequency * localTime)
-      const harmonic = Math.sin(2 * Math.PI * burst.frequency * 1.5 * localTime) * 0.24
-      value += (fundamental + harmonic) * envelope * amplitude
+      const second = Math.sin(2 * Math.PI * burst.frequency * 2 * localTime) * 0.32
+      const third = Math.sin(2 * Math.PI * burst.frequency * 3 * localTime) * 0.16
+      value += (fundamental + second + third) * envelope * baseAmplitude * volume.multiplier
     }
 
-    samples[index] = Math.round(Math.max(-1, Math.min(1, value)) * 32_767)
+    const compressed = Math.tanh(value * volume.drive) / Math.tanh(volume.drive)
+    samples[index] = Math.round(Math.max(-1, Math.min(1, compressed)) * 32_767)
   }
 
   const dataSize = samples.length * 2
@@ -88,23 +96,38 @@ function createWave({ durationSeconds, amplitude, bursts }) {
 }
 
 for (const definition of soundDefinitions) {
-  const buffer = createWave(definition)
-  const resourceName = `medicine_${definition.id}.wav`
-  const targets = [
-    resolve(root, `android/app/src/main/res/raw/${resourceName}`),
-    resolve(root, `public/sounds/${resourceName}`),
-  ]
+  for (const volume of volumeDefinitions) {
+    const buffer = createWave(definition, volume)
+    const resourceName = `medicine_${definition.id}_${volume.id}.wav`
+    const targets = [
+      resolve(root, `android/app/src/main/res/raw/${resourceName}`),
+      resolve(root, `public/sounds/${resourceName}`),
+    ]
 
-  for (const target of targets) {
-    await mkdir(dirname(target), { recursive: true })
-    await writeFile(target, buffer)
-    console.log(`Generated ${target}`)
-  }
+    for (const target of targets) {
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, buffer)
+      console.log(`Generated ${target}`)
+    }
 
-  if (definition.id === 'clear') {
-    const legacyTarget = resolve(root, 'public/sounds/notification.wav')
-    await mkdir(dirname(legacyTarget), { recursive: true })
-    await writeFile(legacyTarget, buffer)
-    console.log(`Generated ${legacyTarget}`)
+    if (volume.id === 'loud') {
+      const legacyResource = `medicine_${definition.id}.wav`
+      const legacyTargets = [
+        resolve(root, `android/app/src/main/res/raw/${legacyResource}`),
+        resolve(root, `public/sounds/${legacyResource}`),
+      ]
+      for (const target of legacyTargets) {
+        await mkdir(dirname(target), { recursive: true })
+        await writeFile(target, buffer)
+        console.log(`Generated ${target}`)
+      }
+    }
+
+    if (definition.id === 'clear' && volume.id === 'loud') {
+      const legacyTarget = resolve(root, 'public/sounds/notification.wav')
+      await mkdir(dirname(legacyTarget), { recursive: true })
+      await writeFile(legacyTarget, buffer)
+      console.log(`Generated ${legacyTarget}`)
+    }
   }
 }

@@ -1,3 +1,10 @@
+import type {
+  ReminderSound,
+  ReminderVolume,
+  VoiceMode,
+  VoiceRate,
+} from '@/features/sound/options'
+
 export interface Medicine {
   id: string
   name: string
@@ -12,6 +19,13 @@ export interface Medicine {
     | 'three_times'
     | 'custom'
   customTimes?: string[]
+  reminderSound?: ReminderSound
+  reminderVolume?: ReminderVolume
+  voiceEnabled?: boolean
+  voiceMode?: VoiceMode
+  voiceVolume?: ReminderVolume
+  voiceRate?: VoiceRate
+  customVoicePath?: string
   endDate?: Date
   createdAt: Date
   notes?: string

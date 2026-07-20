@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { Button } from '@/components/ui/Button'
 import { useSettingsStore } from '@/features/settings/store'
 import {
@@ -8,12 +9,21 @@ import {
   previewReminderVoice,
   stopReminderPreview,
 } from '@/features/sound/nativeAudio'
-import { getReminderSoundOption } from '@/features/sound/options'
+import {
+  getReminderSoundOption,
+  type ReminderSound,
+  type ReminderVolume,
+  type VoiceRate,
+} from '@/features/sound/options'
 
 interface ReminderScreenProps {
   medicineName: string
   dosage: string
   scheduledTime?: string
+  reminderSound: ReminderSound
+  reminderVolume: ReminderVolume
+  medicineVoiceEnabled: boolean
+  medicineVoiceRate: VoiceRate
   onTaken: () => void
   onSkipped: () => void
   onDelayed: () => void
@@ -23,28 +33,32 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
   medicineName,
   dosage,
   scheduledTime,
+  reminderSound,
+  reminderVolume,
+  medicineVoiceEnabled,
+  medicineVoiceRate,
   onTaken,
   onSkipped,
   onDelayed,
 }) => {
   const soundEnabled = useSettingsStore((state) => state.soundEnabled)
-  const soundChoice = useSettingsStore((state) => state.soundChoice)
-  const voiceEnabled = useSettingsStore((state) => state.voiceEnabled)
-  const voiceRate = useSettingsStore((state) => state.voiceRate)
 
   useEffect(() => {
     let voiceTimer: number | undefined
+    const nativeAndroid = Capacitor.isNativePlatform()
 
     if (soundEnabled) {
-      void previewReminderSound(soundChoice, 1).catch((error) => {
+      void previewReminderSound(reminderSound, reminderVolume).catch((error) => {
         console.error('Reminder sound failed:', error)
       })
     }
 
-    if (voiceEnabled) {
-      const delay = soundEnabled ? getReminderSoundOption(soundChoice).previewDelayMs : 100
+    // On Android the exact native alarm speaks once even when the app is closed.
+    // The WebView voice is kept only for the browser so two voices never overlap.
+    if (medicineVoiceEnabled && !nativeAndroid) {
+      const delay = soundEnabled ? getReminderSoundOption(reminderSound).previewDelayMs : 100
       voiceTimer = window.setTimeout(() => {
-        void previewReminderVoice(medicineName, dosage, voiceRate).catch((error) => {
+        void previewReminderVoice(medicineName, dosage, medicineVoiceRate).catch((error) => {
           console.error('Voice reminder failed:', error)
         })
       }, delay)
@@ -54,7 +68,15 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
       if (voiceTimer) window.clearTimeout(voiceTimer)
       void stopReminderPreview()
     }
-  }, [dosage, medicineName, soundChoice, soundEnabled, voiceEnabled, voiceRate])
+  }, [
+    dosage,
+    medicineName,
+    medicineVoiceEnabled,
+    medicineVoiceRate,
+    reminderSound,
+    reminderVolume,
+    soundEnabled,
+  ])
 
   const finish = (action: () => void) => {
     void stopReminderPreview()

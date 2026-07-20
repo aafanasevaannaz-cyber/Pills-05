@@ -10,6 +10,10 @@ import { useHistoryStore } from '@/features/history/store'
 import { useRemindersStore } from '@/features/reminders/store'
 import { startScheduler, stopScheduler } from '@/features/reminders/scheduler'
 import { formatDosage, formatFrequency, getMedicineTimes } from '@/lib/formatMedicine'
+import {
+  defaultReminderSound,
+  defaultReminderVolume,
+} from '@/features/sound/options'
 import type { Medicine } from '@/types'
 
 const sameDay = (first: Date, second: Date) =>
@@ -182,7 +186,7 @@ export const MainScreen: React.FC = () => {
           </div>
         )}
 
-        {medicines.length > 0 && (
+        {todayDoses.length > 0 && (
           <Card className="progress-card ui-card--soft">
             <div className="progress-row">
               <div>
@@ -190,7 +194,7 @@ export const MainScreen: React.FC = () => {
                 <div className="muted">Принято {takenCount} из {todayDoses.length}</div>
                 {skippedCount > 0 && <div className="progress-missed">Не принято: {skippedCount}</div>}
               </div>
-              <strong>{todayDoses.length === 0 ? '—' : `${takenPercent}%`}</strong>
+              <strong>{takenPercent}%</strong>
             </div>
             <div className="progress-track" aria-label={`Принято ${takenCount} из ${todayDoses.length}`}>
               <div className="progress-fill" style={{ width: `${takenPercent}%` }} />
@@ -198,79 +202,89 @@ export const MainScreen: React.FC = () => {
           </Card>
         )}
 
-        <div className="dashboard-grid">
+        {medicines.length === 0 ? (
           <section className="dashboard-schedule">
-            <h2 className="section-title">Расписание</h2>
-            {medicines.length === 0 ? (
-              <Card className="ui-card--soft center">
-                <h2 className="section-title">Лекарств пока нет</h2>
-                <p className="muted">Добавьте название, дозировку и время. Напоминание появится автоматически.</p>
-                <Link href="/add" className="ui-button ui-button--primary ui-button--full">
-                  Добавить первое лекарство
-                </Link>
-              </Card>
-            ) : todayDoses.length === 0 ? (
-              <Card className="ui-card--success">
-                <strong>На сегодня приёмов нет</strong>
-                <p className="muted">Лекарства «по необходимости» остаются в разделе «Лекарства».</p>
-              </Card>
-            ) : (
-              <div className="medicine-list">
-                {todayDoses.map((dose) => {
-                  const status = statusForDose(dose)
-                  const statusLabel =
-                    status === 'taken' ? 'Принято' :
-                    status === 'skipped' ? 'Не принято' :
-                    status === 'late' ? 'Отложено' :
-                    dose.scheduledFor.getTime() < Date.now() ? 'Время прошло' : 'По плану'
-
-                  return (
-                    <Card
-                      key={dose.key}
-                      className={status === 'taken' ? 'ui-card--success' : status === 'skipped' ? 'ui-card--danger' : ''}
-                    >
-                      <div className="medicine-row">
-                        <div className="medicine-time">{dose.time}</div>
-                        <div className="medicine-copy">
-                          <h3 className="medicine-name">{dose.medicine.name}</h3>
-                          <p className="medicine-details">
-                            {formatDosage(dose.medicine.dosage)} · {formatFrequency(dose.medicine.frequency)}
-                          </p>
-                          <span className="medicine-badge">{statusLabel}</span>
-                        </div>
-                      </div>
-                    </Card>
-                  )
-                })}
-              </div>
-            )}
+            <Card className="ui-card--soft center">
+              <h2 className="section-title">Лекарств пока нет</h2>
+              <p className="muted">
+                Добавьте первое лекарство. После сохранения появятся расписание, ближайший приём и прогресс.
+              </p>
+              <Link href="/add" className="ui-button ui-button--primary ui-button--full">
+                Добавить первое лекарство
+              </Link>
+            </Card>
           </section>
+        ) : (
+          <div className="dashboard-grid">
+            <section className="dashboard-schedule">
+              <h2 className="section-title">Расписание</h2>
+              {todayDoses.length === 0 ? (
+                <Card className="ui-card--soft">
+                  <strong>На сегодня приёмов нет</strong>
+                  <p className="muted">
+                    Ближайший приём появится здесь в день, когда лекарство запланировано.
+                  </p>
+                </Card>
+              ) : (
+                <div className="medicine-list">
+                  {todayDoses.map((dose) => {
+                    const status = statusForDose(dose)
+                    const statusLabel =
+                      status === 'taken' ? 'Принято' :
+                      status === 'skipped' ? 'Не принято' :
+                      status === 'late' ? 'Отложено' :
+                      dose.scheduledFor.getTime() < Date.now() ? 'Время прошло' : 'По плану'
 
-          <aside className="dashboard-reminder">
-            <h2 className="section-title">Ближайший приём</h2>
-            {nextDose ? (
-              <Card className="reminder-hero">
-                <p className="reminder-kicker">СЛЕДУЮЩИЙ</p>
-                <h2 className="reminder-name">{nextDose.medicine.name}</h2>
-                <div className="reminder-meta">
-                  <span><strong>Время:</strong> {nextDose.time}</span>
-                  <span><strong>Дозировка:</strong> {formatDosage(nextDose.medicine.dosage)}</span>
+                    return (
+                      <Card
+                        key={dose.key}
+                        className={status === 'taken' ? 'ui-card--success' : status === 'skipped' ? 'ui-card--danger' : ''}
+                      >
+                        <div className="medicine-row">
+                          <div className="medicine-time">{dose.time}</div>
+                          <div className="medicine-copy">
+                            <h3 className="medicine-name">{dose.medicine.name}</h3>
+                            <p className="medicine-details">
+                              {formatDosage(dose.medicine.dosage)} · {formatFrequency(dose.medicine.frequency)}
+                            </p>
+                            <span className="medicine-badge">{statusLabel}</span>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
                 </div>
-              </Card>
-            ) : (
-              <Card className={skippedCount > 0 ? 'ui-card--warning' : 'ui-card--success'}>
-                <strong>{skippedCount > 0 ? 'Ожидающих приёмов больше нет' : 'На сегодня всё принято'}</strong>
-                <p className="muted">
-                  Принято: {takenCount}. Не принято: {skippedCount}. Ожидает: {pendingCount}.
-                </p>
-              </Card>
+              )}
+            </section>
+
+            {todayDoses.length > 0 && (
+              <aside className="dashboard-reminder">
+                <h2 className="section-title">Ближайший приём</h2>
+                {nextDose ? (
+                  <Card className="reminder-hero">
+                    <p className="reminder-kicker">СЛЕДУЮЩИЙ</p>
+                    <h2 className="reminder-name">{nextDose.medicine.name}</h2>
+                    <div className="reminder-meta">
+                      <span><strong>Время:</strong> {nextDose.time}</span>
+                      <span><strong>Дозировка:</strong> {formatDosage(nextDose.medicine.dosage)}</span>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className={skippedCount > 0 ? 'ui-card--warning' : 'ui-card--success'}>
+                    <strong>{skippedCount > 0 ? 'Ожидающих приёмов больше нет' : 'На сегодня всё принято'}</strong>
+                    <p className="muted">
+                      Принято: {takenCount}. Не принято: {skippedCount}. Ожидает: {pendingCount}.
+                    </p>
+                  </Card>
+                )}
+                <div className="quick-actions">
+                  <Link href="/medicines" className="ui-button ui-button--secondary">Все лекарства</Link>
+                  <Link href="/sound" className="ui-button ui-button--secondary">Проверить звук</Link>
+                </div>
+              </aside>
             )}
-            <div className="quick-actions">
-              <Link href="/medicines" className="ui-button ui-button--secondary">Все лекарства</Link>
-              <Link href="/sound" className="ui-button ui-button--secondary">Проверить звук</Link>
-            </div>
-          </aside>
-        </div>
+          </div>
+        )}
       </div>
 
       {activeReminder && activeMedicine && (
@@ -281,6 +295,10 @@ export const MainScreen: React.FC = () => {
             hour: '2-digit',
             minute: '2-digit',
           })}
+          reminderSound={activeMedicine.reminderSound ?? defaultReminderSound}
+          reminderVolume={activeMedicine.reminderVolume ?? defaultReminderVolume}
+          medicineVoiceEnabled={activeMedicine.voiceEnabled !== false}
+          medicineVoiceRate={activeMedicine.voiceRate ?? 'slow'}
           onTaken={handleTaken}
           onDelayed={handleDelay}
           onSkipped={handleSkipped}

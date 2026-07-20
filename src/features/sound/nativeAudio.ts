@@ -23,6 +23,16 @@ interface ReminderAudioPlugin {
     description: string
     resource: string
   }): Promise<void>
+  scheduleVoiceAlarm(options: {
+    requestCode: number
+    medicineId: string
+    triggerAt: number
+    repeatDays: number
+    text: string
+    rate: number
+  }): Promise<void>
+  cancelVoiceAlarmsForMedicine(options: { medicineId: string }): Promise<void>
+  cancelAllVoiceAlarms(): Promise<void>
   openNotificationChannelSettings(options: { channelId: string }): Promise<void>
 }
 
@@ -92,6 +102,39 @@ export async function ensureNativeReminderChannel(
     resource: getReminderResource(sound, volume),
   })
   return true
+}
+
+export async function scheduleNativeVoiceAlarm(options: {
+  requestCode: number
+  medicineId: string
+  triggerAt: Date
+  repeatDays: number
+  medicineName: string
+  dosage: string
+  voiceRate: VoiceRate
+}): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false
+  await NativeReminderAudio.scheduleVoiceAlarm({
+    requestCode: options.requestCode,
+    medicineId: options.medicineId,
+    triggerAt: options.triggerAt.getTime(),
+    repeatDays: options.repeatDays,
+    text: getMedicineReminder(options.medicineName, options.dosage),
+    rate: getVoiceRateValue(options.voiceRate),
+  })
+  return true
+}
+
+export async function cancelNativeVoiceAlarmsForMedicine(
+  medicineId: string
+): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+  await NativeReminderAudio.cancelVoiceAlarmsForMedicine({ medicineId })
+}
+
+export async function cancelAllNativeVoiceAlarms(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+  await NativeReminderAudio.cancelAllVoiceAlarms()
 }
 
 export async function stopReminderPreview(): Promise<void> {

@@ -7,6 +7,7 @@ import android.media.MediaPlayer;
 import android.os.Build;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
+import android.util.Log;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -18,6 +19,7 @@ import java.util.Locale;
 
 @CapacitorPlugin(name = "ReminderAudio")
 public class ReminderAudioPlugin extends Plugin {
+    private static final String TAG = "ReminderAudio";
     private MediaPlayer mediaPlayer;
     private TextToSpeech textToSpeech;
 
@@ -34,6 +36,7 @@ public class ReminderAudioPlugin extends Plugin {
         );
 
         if (resourceId == 0) {
+            Log.e(TAG, "Sound resource missing: " + resourceName);
             call.reject("Звуковой файл не найден: " + resourceName);
             return;
         }
@@ -59,18 +62,21 @@ public class ReminderAudioPlugin extends Plugin {
             float volume = (float) Math.max(0, Math.min(1, requestedVolume));
             player.setVolume(volume, volume);
             player.setOnCompletionListener(completedPlayer -> {
+                Log.i(TAG, "Native sound completed: " + resourceName);
                 completedPlayer.release();
                 if (mediaPlayer == completedPlayer) mediaPlayer = null;
             });
             player.prepare();
             player.start();
             mediaPlayer = player;
+            Log.i(TAG, "Native sound started: " + resourceName + ", volume=" + volume);
 
             JSObject result = new JSObject();
             result.put("playing", true);
             result.put("resource", resourceName);
             call.resolve(result);
         } catch (Exception error) {
+            Log.e(TAG, "Native sound failed: " + resourceName, error);
             stopPlayer();
             call.reject("Не удалось воспроизвести сигнал", error);
         }
@@ -85,6 +91,7 @@ public class ReminderAudioPlugin extends Plugin {
         stopSpeech();
         textToSpeech = new TextToSpeech(getContext(), status -> {
             if (status != TextToSpeech.SUCCESS || textToSpeech == null) {
+                Log.e(TAG, "TextToSpeech initialization failed: " + status);
                 call.reject("На устройстве недоступна голосовая озвучка");
                 return;
             }
@@ -92,6 +99,7 @@ public class ReminderAudioPlugin extends Plugin {
             int languageResult = textToSpeech.setLanguage(new Locale("ru", "RU"));
             if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
                 languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.e(TAG, "Russian TextToSpeech voice is unavailable: " + languageResult);
                 stopSpeech();
                 call.reject("На устройстве не установлен русский голос Android");
                 return;
@@ -109,6 +117,7 @@ public class ReminderAudioPlugin extends Plugin {
             } else {
                 textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null);
             }
+            Log.i(TAG, "Russian voice started, rate=" + rate + ", text=" + text);
 
             JSObject result = new JSObject();
             result.put("speaking", true);
@@ -120,6 +129,7 @@ public class ReminderAudioPlugin extends Plugin {
     public void stop(PluginCall call) {
         stopPlayer();
         stopSpeech();
+        Log.i(TAG, "Native reminder preview stopped");
         call.resolve();
     }
 
@@ -139,8 +149,10 @@ public class ReminderAudioPlugin extends Plugin {
             }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(intent);
+            Log.i(TAG, "Opened Android notification settings for channel=" + channelId);
             call.resolve();
         } catch (Exception error) {
+            Log.e(TAG, "Could not open notification settings for channel=" + channelId, error);
             call.reject("Не удалось открыть настройки уведомлений Android", error);
         }
     }

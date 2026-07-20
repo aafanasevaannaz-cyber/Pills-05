@@ -119,6 +119,70 @@
   text-align: center;
 }
 
+.volume-slider {
+  display: grid;
+  gap: 10px;
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.volume-slider__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.volume-slider__heading .ui-label {
+  margin: 0;
+}
+
+.volume-slider__value {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 1.05rem;
+}
+
+.volume-slider__help {
+  margin: 0;
+}
+
+.volume-slider__input {
+  width: 100%;
+  min-height: 46px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.volume-slider__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.volume-slider__ticks {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.volume-slider__ticks span {
+  flex: 1 1 0;
+}
+
+.volume-slider__ticks span:nth-child(2) {
+  text-align: center;
+}
+
+.volume-slider__ticks span:last-child {
+  text-align: right;
+}
+
 @media (min-width: 640px) {
   .sound-option-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -146,5 +210,15 @@
   [data-text-size='extra-large'] .sound-option__icon {
     width: 40px;
     height: 40px;
+  }
+
+  .volume-slider__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .volume-slider__ticks {
+    font-size: 0.7rem;
   }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { Button } from '@/components/ui/Button'
 import { useSettingsStore } from '@/features/settings/store'
 import {
@@ -44,6 +45,7 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
 
   useEffect(() => {
     let voiceTimer: number | undefined
+    const nativeAndroid = Capacitor.isNativePlatform()
 
     if (soundEnabled) {
       void previewReminderSound(reminderSound, reminderVolume).catch((error) => {
@@ -51,7 +53,9 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
       })
     }
 
-    if (medicineVoiceEnabled) {
+    // On Android the exact native alarm speaks once even when the app is closed.
+    // The WebView voice is kept only for the browser so two voices never overlap.
+    if (medicineVoiceEnabled && !nativeAndroid) {
       const delay = soundEnabled ? getReminderSoundOption(reminderSound).previewDelayMs : 100
       voiceTimer = window.setTimeout(() => {
         void previewReminderVoice(medicineName, dosage, medicineVoiceRate).catch((error) => {

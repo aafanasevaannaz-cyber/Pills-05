@@ -1,0 +1,289 @@
+name: realme C55 final loud voice QA
+
+on:
+  pull_request:
+    branches:
+      - claude/setup-documentation-uVAKM
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install and build APK
+        run: |
+          npm install
+          npm run type-check
+          npm run build
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-realme-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  realme-android12-qa:
+    needs: build-apk
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ADB: /usr/local/lib/android/sdk/platform-tools/adb
+      PACKAGE: com.moi.tabletki.reminder
+      COMPONENT: com.moi.tabletki.reminder/com.pills.reminder.MainActivity
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: final-realme-apk
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          sudo chmod 666 /dev/kvm
+
+      - name: Boot Android 12 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qa/screenshots qa/xml qa/logs
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          EMULATOR="$ANDROID_HOME/emulator/emulator"
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-31;google_apis;x86_64" > qa/logs/sdkmanager.txt 2>&1
+          echo no | "$AVDMANAGER" create avd --force --name realme-final-api31 --package "system-images;android-31;google_apis;x86_64" --device pixel_2 > qa/logs/avdmanager.txt 2>&1
+
+          nohup "$EMULATOR" @realme-final-api31 \
+            -no-window -no-snapshot -noaudio -no-boot-anim \
+            -gpu swiftshader_indirect -memory 4096 -cores 2 \
+            > qa/logs/emulator.txt 2>&1 &
+          echo $! > qa/emulator.pid
+
+          "$ADB" wait-for-device
+          for attempt in $(seq 1 90); do
+            if [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              break
+            fi
+            sleep 3
+          done
+          test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
+          "$ADB" shell wm size 1080x2400
+          "$ADB" shell wm density 400
+          "$ADB" shell settings put system screen_off_timeout 2147483647
+          "$ADB" shell settings put global window_animation_scale 0
+          "$ADB" shell settings put global transition_animation_scale 0
+          "$ADB" shell settings put global animator_duration_scale 0
+          "$ADB" shell input keyevent 82 || true
+          "$ADB" shell getprop > qa/logs/device-properties.txt
+
+      - name: Run focused realme scenario
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          ERRORS=0
+          ACTIONS=qa/actions.txt
+          : > "$ACTIONS"
+          log() { printf '%s | %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$ACTIONS"; }
+          fail() { log "ОШИБКА: $*"; ERRORS=$((ERRORS + 1)); }
+
+          dump_ui() {
+            local name="$1"
+            "$ADB" shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+            "$ADB" pull /sdcard/window.xml "qa/xml/${name}.xml" >/dev/null 2>&1 || true
+            "$ADB" exec-out screencap -p > "qa/screenshots/${name}.png" || true
+          }
+
+          refresh_xml() {
+            "$ADB" shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+            "$ADB" pull /sdcard/window.xml qa/current.xml >/dev/null 2>&1 || true
+          }
+
+          tap_text() {
+            local needle="$1"
+            local tries="${2:-8}"
+            for attempt in $(seq 1 "$tries"); do
+              refresh_xml
+              coords=$(python3 - "$needle" <<'PY'
+          import re, sys, xml.etree.ElementTree as ET
+          needle = sys.argv[1].casefold()
+          try:
+              root = ET.parse('qa/current.xml').getroot()
+          except Exception:
+              raise SystemExit(1)
+          matches = []
+          for node in root.iter('node'):
+              text = ' '.join(filter(None, [node.attrib.get('text', ''), node.attrib.get('content-desc', '')])).strip()
+              if needle not in text.casefold():
+                  continue
+              match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds', ''))
+              if not match:
+                  continue
+              x1, y1, x2, y2 = map(int, match.groups())
+              if x2 <= x1 or y2 <= y1:
+                  continue
+              clickable = node.attrib.get('clickable') == 'true'
+              matches.append((not clickable, -(x2-x1)*(y2-y1), (x1+x2)//2, (y1+y2)//2, text))
+          if not matches:
+              raise SystemExit(1)
+          matches.sort()
+          print(matches[0][2], matches[0][3])
+          PY
+              ) || true
+              if [ -n "${coords:-}" ]; then
+                read -r x y <<< "$coords"
+                "$ADB" shell input tap "$x" "$y"
+                log "Нажато: $needle ($x,$y)"
+                sleep 2
+                return 0
+              fi
+              "$ADB" shell input swipe 540 1820 540 720 450 || true
+              sleep 1
+            done
+            fail "Не найден элемент: $needle"
+            return 1
+          }
+
+          tap_first_input() {
+            refresh_xml
+            coords=$(python3 - <<'PY'
+          import re, xml.etree.ElementTree as ET
+          root = ET.parse('qa/current.xml').getroot()
+          for node in root.iter('node'):
+              if node.attrib.get('class') not in ('android.widget.EditText', 'android.widget.AutoCompleteTextView'):
+                  continue
+              match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds', ''))
+              if match:
+                  x1,y1,x2,y2=map(int,match.groups())
+                  if x2>x1 and y2>y1:
+                      print((x1+x2)//2,(y1+y2)//2)
+                      raise SystemExit(0)
+          raise SystemExit(1)
+          PY
+            ) || true
+            if [ -z "${coords:-}" ]; then fail "Не найдено поле названия"; return 1; fi
+            read -r x y <<< "$coords"
+            "$ADB" shell input tap "$x" "$y"
+            sleep 1
+          }
+
+          log "Установка стабильного APK"
+          "$ADB" install -r apk/app-debug.apk > qa/logs/install.txt 2>&1 || fail "APK не установился"
+          "$ADB" shell pm clear "$PACKAGE" >/dev/null 2>&1 || true
+          "$ADB" shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true
+          "$ADB" logcat -c
+          "$ADB" shell am start -W -n "$COMPONENT" > qa/logs/launch.txt 2>&1 || fail "Приложение не запустилось"
+          sleep 6
+          dump_ui 00-first-launch
+
+          tap_text "Разрешить уведомления" 2 || true
+          sleep 4
+          dump_ui 01-empty-state
+          if ! grep -q "Лекарств пока нет" qa/xml/01-empty-state.xml; then fail "На пустом экране нет правильного сообщения"; fi
+          if grep -q "На сегодня всё принято" qa/xml/01-empty-state.xml; then fail "Пустой экран ошибочно сообщает, что всё принято"; fi
+          if grep -Eq "0 из 0|Принято 0 из 0" qa/xml/01-empty-state.xml; then fail "Пустой экран показывает 0 из 0"; fi
+
+          tap_text "Добавить первое лекарство" 3 || tap_text "Добавить лекарство" 3 || true
+          sleep 3
+          dump_ui 02-add-name
+          if ! grep -q "Шаг 1 из 5" qa/xml/02-add-name.xml; then fail "Форма не показывает 5 шагов"; fi
+          tap_first_input || true
+          "$ADB" shell input text "TestMed"
+          "$ADB" shell input keyevent 4
+          sleep 1
+          tap_text "Продолжить" 4 || true
+          tap_text "Каждый день" 4 || true
+          tap_text "Продолжить" 5 || true
+          tap_text "08:00" 3 || true
+          tap_text "Продолжить" 8 || true
+          sleep 3
+          dump_ui 03-sound-step
+          for required in "Как должно звучать напоминание" "Громкость" "Озвучить название голосом" "Быстро проверить звук и голос"; do
+            if ! grep -q "$required" qa/xml/03-sound-step.xml; then fail "На звуковом шаге нет: $required"; fi
+          done
+
+          tap_text "Максимальная" 5 || true
+          "$ADB" logcat -c
+          tap_text "Быстро проверить звук и голос" 6 || true
+          sleep 9
+          "$ADB" logcat -d > qa/logs/preview-logcat.txt
+          if ! grep -q "Native alarm sound started: medicine_alarm_maximum" qa/logs/preview-logcat.txt; then fail "Максимальный нативный сигнал не запустился"; fi
+          if ! grep -q "Russian alarm-stream voice started" qa/logs/preview-logcat.txt; then fail "Русский голос через поток будильника не запустился"; fi
+          dump_ui 04-sound-preview
+
+          tap_text "Продолжить" 8 || true
+          tap_text "1 таблетка" 4 || true
+          tap_text "Сохранить" 8 || true
+          sleep 7
+          dump_ui 05-home-with-medicine
+          if ! grep -q "TestMed" qa/xml/05-home-with-medicine.xml; then fail "Лекарство не появилось на главном экране"; fi
+
+          tap_text "Проверить звук" 8 || true
+          sleep 4
+          dump_ui 06-sound-page
+          if ! grep -q "Громкость сигнала" qa/xml/06-sound-page.xml; then fail "Не открылась отдельная страница звука"; fi
+
+          "$ADB" logcat -c
+          tap_text "Проверить через 3 секунды" 12 || true
+          sleep 1
+          "$ADB" shell input keyevent 3
+          sleep 13
+          "$ADB" logcat -d > qa/logs/closed-app-logcat.txt
+          "$ADB" shell dumpsys notification --noredact > qa/logs/notifications.txt 2>&1 || true
+          if ! grep -q "Scheduled voice alarm" qa/logs/closed-app-logcat.txt; then fail "Голос для закрытого приложения не был запланирован"; fi
+          if ! grep -Eq "Background Russian voice started|Russian background TTS unavailable" qa/logs/closed-app-logcat.txt; then fail "Фоновая голосовая служба не запускалась"; fi
+          "$ADB" shell cmd statusbar expand-notifications >/dev/null 2>&1 || true
+          sleep 2
+          dump_ui 07-closed-app-notification
+
+          "$ADB" logcat -d > qa/logs/full-logcat.txt
+          "$ADB" logcat -b crash -d > qa/logs/crash-buffer.txt
+          if grep -Eq "FATAL EXCEPTION.*com\.moi\.tabletki\.reminder|ANR in com\.moi\.tabletki\.reminder" qa/logs/full-logcat.txt; then fail "Обнаружено падение или ANR приложения"; fi
+
+          printf 'Ошибок: %s\n' "$ERRORS" > qa/result.txt
+          log "Финальный QA завершён. Ошибок: $ERRORS"
+          exit "$ERRORS"
+
+      - name: Collect diagnostics
+        if: always()
+        shell: bash
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          "$ADB" shell dumpsys package "$PACKAGE" > qa/logs/package.txt 2>&1 || true
+          "$ADB" devices -l > qa/logs/adb-devices.txt 2>&1 || true
+
+      - name: Upload final realme QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-realme-android12-qa
+          path: qa
+          if-no-files-found: error

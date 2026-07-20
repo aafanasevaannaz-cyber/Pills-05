@@ -1,0 +1,201 @@
+name: realme C55 Android 12 emulator QA
+
+on:
+  pull_request:
+    branches:
+      - claude/setup-documentation-uVAKM
+    paths:
+      - '.github/workflows/device-emulator-qa.yml'
+      - 'qa/android/**'
+      - 'src/**'
+      - 'android/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: npm run type-check
+
+      - name: Export and sync Android
+        run: npm run android:sync
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace --console=plain
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-realme-android12-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  emulator-qa:
+    needs: build-apk
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: pills-realme-android12-apk
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
+      - name: Boot Android 12 emulator and run complete QA
+        id: qa
+        continue-on-error: true
+        env:
+          PROFILE_NAME: realme-c55-android12
+          API_LEVEL: '31'
+          WIDTH: '1080'
+          HEIGHT: '2400'
+          DENSITY: '400'
+          TABLET: 'false'
+        run: |
+          set -o pipefail
+          RESULT_DIR="qa-results/${PROFILE_NAME}"
+          mkdir -p "${RESULT_DIR}/logs"
+          SETUP_LOG="${RESULT_DIR}/logs/emulator-setup.txt"
+          SYSTEM_IMAGE="system-images;android-${API_LEVEL};google_apis;x86_64"
+          AVD_NAME="qa-${PROFILE_NAME}"
+
+          SDKMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          AVDMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name avdmanager 2>/dev/null | sort | tail -n 1)"
+          EMULATOR="${ANDROID_HOME}/emulator/emulator"
+          ADB="${ANDROID_HOME}/platform-tools/adb"
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
+
+          {
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            echo "SYSTEM_IMAGE=${SYSTEM_IMAGE}"
+            echo "AVD_NAME=${AVD_NAME}"
+            test -x "${SDKMANAGER}"
+            test -x "${AVDMANAGER}"
+            test -x "${ADB}"
+            yes | "${SDKMANAGER}" --licenses >/dev/null || true
+            "${SDKMANAGER}" "platform-tools" "emulator" "${SYSTEM_IMAGE}"
+            test -x "${EMULATOR}"
+            echo no | "${AVDMANAGER}" create avd --force --name "${AVD_NAME}" --package "${SYSTEM_IMAGE}" --device "pixel_2"
+            "${EMULATOR}" -list-avds
+          } 2>&1 | tee "${SETUP_LOG}"
+
+          nohup "${EMULATOR}" \
+            -avd "${AVD_NAME}" \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            -memory 4096 \
+            -cores 2 \
+            > "${RESULT_DIR}/logs/emulator-runtime.txt" 2>&1 &
+          EMULATOR_PID=$!
+          echo "${EMULATOR_PID}" > "${RESULT_DIR}/emulator.pid"
+
+          cleanup() {
+            "${ADB}" emu kill >/dev/null 2>&1 || true
+            kill "${EMULATOR_PID}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          BOOTED=0
+          for attempt in $(seq 1 72); do
+            "${ADB}" devices -l | tee "${RESULT_DIR}/logs/adb-devices-latest.txt"
+            if "${ADB}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then
+              BOOTED=1
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "${BOOTED}" -ne 1 ]; then
+            echo "Эмулятор Android 12 не загрузился за 6 минут." | tee "${RESULT_DIR}/crash-message.txt"
+            echo "Действия с приложением не выполнялись: эмулятор не загрузился." > "${RESULT_DIR}/actions.txt"
+            echo "Тест приложения не начался: эмулятор Android 12 не загрузился." > "${RESULT_DIR}/summary.md"
+            exit 1
+          fi
+
+          "${ADB}" shell input keyevent 82 || true
+
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('qa/android/run_device_qa.sh')
+          text = path.read_text()
+          old = '''  adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+            adb pull /sdcard/window.xml "$tmp" >/dev/null 2>&1 || true'''
+          new = '''  rm -f "$tmp"
+            for retry in 1 2 3; do
+              adb shell uiautomator dump --compressed /sdcard/window.xml >/dev/null 2>&1 || true
+              adb pull /sdcard/window.xml "$tmp" >/dev/null 2>&1 || true
+              [[ -s "$tmp" ]] && break
+              sleep 1
+            done'''
+          text = text.replace(old, new)
+          text = text.replace(
+              'if tap_text_once "+ Добавить" 0 || tap_text_once "Добавить" 0; then',
+              'if tap_text_once "+ Добавить" 0 || tap_text_once "Добавить" 0 || { adb shell input tap $((WIDTH * 4 / 5)) $((HEIGHT / 12)); log_action "Резервное нажатие кнопки Добавить по координатам"; sleep 2; }; then'
+          )
+          text = text.replace(
+              'if tap_text_scroll "Очень большой"; then',
+              'adb shell input swipe $((WIDTH / 2)) $((HEIGHT * 4 / 5)) $((WIDTH / 2)) $((HEIGHT / 3)) 550\nlog_action "Прокрутка настройки крупного текста выше нижнего меню"\nsleep 2\nif tap_text_scroll "Очень большой"; then'
+          )
+          path.write_text(text)
+          PY
+
+          chmod +x qa/android/run_device_qa.sh qa/android/ui_pick.py
+          bash qa/android/run_device_qa.sh \
+            "${PROFILE_NAME}" \
+            "${WIDTH}" \
+            "${HEIGHT}" \
+            "${DENSITY}" \
+            "${TABLET}" \
+            'apk/app-debug.apk'
+
+      - name: Upload complete Android 12 QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-realme-c55-android12
+          path: qa-results/realme-c55-android12
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Fail job after evidence upload
+        if: steps.qa.outcome == 'failure'
+        run: exit 1

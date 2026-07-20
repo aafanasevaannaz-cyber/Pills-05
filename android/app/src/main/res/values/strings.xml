@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Мои таблетки</string>
-    <string name="title_activity_main">Мои таблетки</string>
-    <string name="package_name">com.moi.tabletki.reminder</string>
-    <string name="custom_url_scheme">com.moi.tabletki.reminder</string>
+    <string name="app_name">Мои таблетки — новая</string>
+    <string name="title_activity_main">Мои таблетки — новая</string>
+    <string name="package_name">com.moi.tabletki.reminder.safe</string>
+    <string name="custom_url_scheme">com.moi.tabletki.reminder.safe</string>
 </resources>

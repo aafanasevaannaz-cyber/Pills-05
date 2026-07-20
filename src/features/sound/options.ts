@@ -1,6 +1,7 @@
 export type ReminderSound = 'gentle' | 'clear' | 'alarm'
 export type ReminderVolume = 'normal' | 'loud' | 'maximum'
 export type VoiceRate = 'slow' | 'normal'
+export type VoiceMode = 'android' | 'recorded' | 'off'
 
 export type ReminderSoundOption = {
   id: ReminderSound
@@ -41,25 +42,26 @@ export const reminderVolumeOptions: ReminderVolumeOption[] = [
   {
     id: 'normal',
     title: 'Обычная',
-    description: 'Не слишком резко в тихой комнате',
-    gain: 0.72,
+    description: 'Около половины громкости будильника',
+    gain: 0.55,
   },
   {
     id: 'loud',
     title: 'Громкая',
-    description: 'Для повседневного использования',
-    gain: 0.9,
+    description: 'Около 80% громкости будильника',
+    gain: 0.8,
   },
   {
     id: 'maximum',
     title: 'Максимальная',
-    description: 'Самый насыщенный файл и поток будильника',
+    description: 'Полная громкость будильника Android',
     gain: 1,
   },
 ]
 
 export const defaultReminderSound: ReminderSound = 'alarm'
 export const defaultReminderVolume: ReminderVolume = 'maximum'
+export const defaultVoiceVolume: ReminderVolume = 'maximum'
 
 export function isReminderSound(value: unknown): value is ReminderSound {
   return value === 'gentle' || value === 'clear' || value === 'alarm'
@@ -67,6 +69,10 @@ export function isReminderSound(value: unknown): value is ReminderSound {
 
 export function isReminderVolume(value: unknown): value is ReminderVolume {
   return value === 'normal' || value === 'loud' || value === 'maximum'
+}
+
+export function isVoiceMode(value: unknown): value is VoiceMode {
+  return value === 'android' || value === 'recorded' || value === 'off'
 }
 
 export function getReminderSoundOption(sound: ReminderSound): ReminderSoundOption {
@@ -86,7 +92,7 @@ export function getReminderWebUrl(sound: ReminderSound, volume: ReminderVolume):
 }
 
 export function getReminderChannelId(sound: ReminderSound, volume: ReminderVolume): string {
-  return `medicine-reminders-v7-${sound}-${volume}`
+  return `medicine-reminders-v8-${sound}-${volume}`
 }
 
 export function getVoiceRateValue(rate: VoiceRate): number {

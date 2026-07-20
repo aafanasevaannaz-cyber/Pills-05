@@ -1,9 +1,12 @@
 import { create } from 'zustand'
 import {
   defaultReminderSound,
+  defaultReminderVolume,
   isReminderSound,
+  isReminderVolume,
   isVoiceRate,
   type ReminderSound,
+  type ReminderVolume,
   type VoiceRate,
 } from '@/features/sound/options'
 
@@ -18,6 +21,7 @@ export type PersistedSettings = {
   reduceAnimations: boolean
   soundEnabled: boolean
   soundChoice: ReminderSound
+  volumeChoice: ReminderVolume
   voiceEnabled: boolean
   voiceRate: VoiceRate
   pushNotificationsEnabled: boolean
@@ -30,6 +34,7 @@ interface SettingsStore extends PersistedSettings {
   setReduceAnimations: (reduce: boolean) => void
   setSoundEnabled: (enabled: boolean) => void
   setSoundChoice: (sound: ReminderSound) => void
+  setVolumeChoice: (volume: ReminderVolume) => void
   setVoiceEnabled: (enabled: boolean) => void
   setVoiceRate: (rate: VoiceRate) => void
   setPushNotificationsEnabled: (enabled: boolean) => void
@@ -47,6 +52,7 @@ const defaults: PersistedSettings = {
   reduceAnimations: false,
   soundEnabled: true,
   soundChoice: defaultReminderSound,
+  volumeChoice: defaultReminderVolume,
   voiceEnabled: true,
   voiceRate: 'slow',
   pushNotificationsEnabled: true,
@@ -72,6 +78,9 @@ function normalizeSettings(value: unknown): PersistedSettings {
     soundChoice: isReminderSound(candidate.soundChoice)
       ? candidate.soundChoice
       : defaultReminderSound,
+    volumeChoice: isReminderVolume(candidate.volumeChoice)
+      ? candidate.volumeChoice
+      : defaultReminderVolume,
     voiceEnabled: candidate.voiceEnabled !== false,
     voiceRate: isVoiceRate(candidate.voiceRate) ? candidate.voiceRate : defaults.voiceRate,
     pushNotificationsEnabled: candidate.pushNotificationsEnabled !== false,
@@ -86,6 +95,7 @@ function snapshot(state: PersistedSettings): PersistedSettings {
     reduceAnimations: state.reduceAnimations,
     soundEnabled: state.soundEnabled,
     soundChoice: state.soundChoice,
+    volumeChoice: state.volumeChoice,
     voiceEnabled: state.voiceEnabled,
     voiceRate: state.voiceRate,
     pushNotificationsEnabled: state.pushNotificationsEnabled,
@@ -111,6 +121,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setReduceAnimations: (reduceAnimations) => update({ reduceAnimations }),
     setSoundEnabled: (soundEnabled) => update({ soundEnabled }),
     setSoundChoice: (soundChoice) => update({ soundChoice }),
+    setVolumeChoice: (volumeChoice) => update({ volumeChoice }),
     setVoiceEnabled: (voiceEnabled) => update({ voiceEnabled }),
     setVoiceRate: (voiceRate) => update({ voiceRate }),
     setPushNotificationsEnabled: (pushNotificationsEnabled) =>

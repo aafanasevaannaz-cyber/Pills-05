@@ -180,6 +180,63 @@ public class ReminderAudioPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void scheduleVoiceAlarm(PluginCall call) {
+        int requestCode = call.getInt("requestCode", 0);
+        String medicineId = call.getString("medicineId", "");
+        long triggerAt = Math.round(call.getDouble("triggerAt", (double) System.currentTimeMillis()));
+        int repeatDays = call.getInt("repeatDays", 0);
+        String text = call.getString("text", "Пора принять лекарство");
+        float rate = (float) Math.max(0.5, Math.min(1.2, call.getDouble("rate", 0.72)));
+
+        if (requestCode <= 0 || text == null || text.trim().isEmpty()) {
+            call.reject("Неверные параметры голосового напоминания");
+            return;
+        }
+
+        try {
+            ReminderVoiceAlarmReceiver.schedule(
+                getContext(),
+                requestCode,
+                medicineId == null ? "" : medicineId,
+                triggerAt,
+                Math.max(0, repeatDays),
+                text,
+                rate
+            );
+            call.resolve();
+        } catch (Exception error) {
+            Log.e(TAG, "Could not schedule background voice alarm", error);
+            call.reject("Не удалось запланировать голосовое напоминание", error);
+        }
+    }
+
+    @PluginMethod
+    public void cancelVoiceAlarmsForMedicine(PluginCall call) {
+        String medicineId = call.getString("medicineId", "");
+        try {
+            ReminderVoiceAlarmReceiver.cancelForMedicine(
+                getContext(),
+                medicineId == null ? "" : medicineId
+            );
+            call.resolve();
+        } catch (Exception error) {
+            Log.e(TAG, "Could not cancel medicine voice alarms", error);
+            call.reject("Не удалось отменить голосовые напоминания", error);
+        }
+    }
+
+    @PluginMethod
+    public void cancelAllVoiceAlarms(PluginCall call) {
+        try {
+            ReminderVoiceAlarmReceiver.cancelAll(getContext());
+            call.resolve();
+        } catch (Exception error) {
+            Log.e(TAG, "Could not cancel all voice alarms", error);
+            call.reject("Не удалось отменить голосовые напоминания", error);
+        }
+    }
+
+    @PluginMethod
     public void stop(PluginCall call) {
         stopPlayer();
         stopSpeech();

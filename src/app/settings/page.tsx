@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -9,11 +10,7 @@ import {
   type TextSize,
   type Theme,
 } from '@/features/settings/store'
-import { playReminderChime } from '@/features/sound/player'
-import {
-  isNativeNotificationsAvailable,
-  scheduleTestNotification,
-} from '@/features/reminders/nativeNotifications.logic'
+import { getReminderSoundOption } from '@/features/sound/options'
 import { exportBackup, importBackupFile } from '@/lib/backup'
 
 export default function SettingsPage() {
@@ -21,29 +18,6 @@ export default function SettingsPage() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
-
-  const testSound = async () => {
-    setBusy(true)
-    setStatus('')
-    try {
-      await playReminderChime(1)
-      if (isNativeNotificationsAvailable()) {
-        const scheduled = await scheduleTestNotification()
-        setStatus(
-          scheduled
-            ? 'Сигнал прозвучал сейчас. Ещё одно громкое уведомление придёт через 3 секунды.'
-            : 'Android открыл системные настройки. Разрешите уведомления и точные напоминания, вернитесь в приложение и нажмите проверку ещё раз.'
-        )
-      } else {
-        setStatus('Проверочный сигнал воспроизведён.')
-      }
-    } catch (error) {
-      console.error('Sound test failed:', error)
-      setStatus('Не удалось запустить проверку звука.')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const handleExport = async () => {
     setBusy(true)
@@ -78,6 +52,8 @@ export default function SettingsPage() {
     }
   }
 
+  const selectedSound = getReminderSoundOption(settings.soundChoice)
+
   return (
     <div className="app-page">
       <header className="app-header">
@@ -88,6 +64,18 @@ export default function SettingsPage() {
       </header>
 
       <div className="page-stack">
+        <Card className="settings-feature-card ui-card--warning">
+          <div>
+            <h2 className="section-title">Звук и голос</h2>
+            <p className="muted">
+              Сейчас выбран сигнал «{selectedSound.title}». Голосовая озвучка {settings.voiceEnabled ? 'включена' : 'выключена'}.
+            </p>
+          </div>
+          <Link href="/sound" className="ui-button ui-button--primary ui-button--full">
+            Настроить и проверить звук
+          </Link>
+        </Card>
+
         <Card>
           <h2 className="section-title">Тема</h2>
           <div className="choice-grid">
@@ -139,7 +127,7 @@ export default function SettingsPage() {
 
         <Card>
           <h2 className="section-title">Шрифт</h2>
-          <p className="muted">Эти шрифты уже есть на устройстве и действительно меняются без интернета.</p>
+          <p className="muted">Эти шрифты уже есть на устройстве и работают без интернета.</p>
           <div className="choice-grid">
             {[
               { id: 'system', title: 'Обычный', description: 'Стандартный шрифт Android' },
@@ -163,54 +151,9 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <h2 className="section-title">Звук и уведомления</h2>
-          <div className="page-stack">
-            <label className={`choice${settings.soundEnabled ? ' is-selected' : ''}`}>
-              <input
-                type="checkbox"
-                checked={settings.soundEnabled}
-                onChange={(event) => settings.setSoundEnabled(event.target.checked)}
-              />
-              <span className="choice__text">
-                <span className="choice__title">Звуковой сигнал</span>
-                <span className="choice__description">Проигрывать сигнал при открытом приложении</span>
-              </span>
-            </label>
-            <label className={`choice${settings.voiceEnabled ? ' is-selected' : ''}`}>
-              <input
-                type="checkbox"
-                checked={settings.voiceEnabled}
-                onChange={(event) => settings.setVoiceEnabled(event.target.checked)}
-              />
-              <span className="choice__text">
-                <span className="choice__title">Голосом назвать лекарство</span>
-                <span className="choice__description">Произнести название и дозировку по-русски</span>
-              </span>
-            </label>
-            <label className={`choice${settings.pushNotificationsEnabled ? ' is-selected' : ''}`}>
-              <input
-                type="checkbox"
-                checked={settings.pushNotificationsEnabled}
-                onChange={(event) => settings.setPushNotificationsEnabled(event.target.checked)}
-              />
-              <span className="choice__text">
-                <span className="choice__title">Уведомления</span>
-                <span className="choice__description">Показывать напоминания, когда приложение закрыто</span>
-              </span>
-            </label>
-            <Button variant="primary" className="ui-button--full" disabled={busy} onClick={() => void testSound()}>
-              Проверить звук и уведомление
-            </Button>
-            <p className="ui-help">
-              Громкость регулируется кнопками громкости и в системном разделе «Уведомления». Беззвучный режим и «Не беспокоить» приложение обойти не может.
-            </p>
-          </div>
-        </Card>
-
-        <Card>
           <h2 className="section-title">Перенос на другое устройство</h2>
           <p className="muted">
-            В резервную копию входят лекарства, расписание, история и оформление. Медицинские данные никуда не отправляются автоматически.
+            В резервную копию входят лекарства, расписание, история, звук и оформление. Медицинские данные никуда не отправляются автоматически.
           </p>
           <div className="form-actions">
             <Button variant="primary" disabled={busy} onClick={() => void handleExport()}>

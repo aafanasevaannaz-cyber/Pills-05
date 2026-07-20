@@ -2,6 +2,12 @@ import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Medicine } from '@/types'
 import { formatDosage } from '@/lib/formatMedicine'
+import { useSettingsStore } from '@/features/settings/store'
+import {
+  getReminderChannelId,
+  getReminderSoundOption,
+  type ReminderSound,
+} from '@/features/sound/options'
 import {
   addToCache,
   generateNotificationId,
@@ -9,24 +15,28 @@ import {
   removeFromCache,
 } from './notificationIds.logic'
 
-const REMINDER_CHANNEL_ID = 'medicine-reminders-loud-v3'
-const REMINDER_SOUND = 'medicine_alarm.wav'
-
 export const isNativeNotificationsAvailable = (): boolean => Capacitor.isNativePlatform()
 
-export const ensureReminderChannel = async (): Promise<boolean> => {
+const selectedSound = (): ReminderSound => useSettingsStore.getState().soundChoice
+
+export const ensureReminderChannel = async (
+  soundChoice: ReminderSound = selectedSound()
+): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return false
+
+  const option = getReminderSoundOption(soundChoice)
+  const channelId = getReminderChannelId(soundChoice)
 
   try {
     const result = await LocalNotifications.listChannels()
-    const exists = result.channels.some((channel) => channel.id === REMINDER_CHANNEL_ID)
+    const exists = result.channels.some((channel) => channel.id === channelId)
     if (exists) return true
 
     await LocalNotifications.createChannel({
-      id: REMINDER_CHANNEL_ID,
-      name: 'Напоминания о лекарствах',
-      description: 'Громкие напоминания о времени приёма лекарств',
-      sound: REMINDER_SOUND,
+      id: channelId,
+      name: `Лекарства — ${option.title}`,
+      description: `Напоминания о лекарствах. Выбран сигнал: ${option.title}.`,
+      sound: option.resource,
       importance: 5,
       visibility: 1,
       vibration: true,
@@ -80,19 +90,27 @@ export const openExactReminderSettings = async (): Promise<void> => {
 const notificationBody = (medicine: Medicine) =>
   `${medicine.name}. Дозировка: ${formatDosage(medicine.dosage)}`
 
-const notificationBase = (medicine: Medicine, time: string) => ({
-  title: 'Пора принять лекарство',
-  body: notificationBody(medicine),
-  largeBody: `${notificationBody(medicine)}. Запланированное время: ${time}.`,
-  sound: REMINDER_SOUND,
-  channelId: REMINDER_CHANNEL_ID,
-  extra: { medicineId: medicine.id, time },
-  autoCancel: true,
-})
+const notificationBase = (
+  medicine: Medicine,
+  time: string,
+  soundChoice: ReminderSound
+) => {
+  const option = getReminderSoundOption(soundChoice)
+  return {
+    title: 'Пора принять лекарство',
+    body: notificationBody(medicine),
+    largeBody: `${notificationBody(medicine)}. Запланированное время: ${time}.`,
+    sound: option.resource,
+    channelId: getReminderChannelId(soundChoice),
+    extra: { medicineId: medicine.id, time },
+    autoCancel: true,
+  }
+}
 
 const scheduleDailyNotification = async (
   medicine: Medicine,
-  time: string
+  time: string,
+  soundChoice: ReminderSound
 ): Promise<number | null> => {
   const [hour, minute] = time.split(':').map(Number)
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null
@@ -102,7 +120,7 @@ const scheduleDailyNotification = async (
     notifications: [
       {
         id: notificationId,
-        ...notificationBase(medicine, time),
+        ...notificationBase(medicine, time, soundChoice),
         schedule: { on: { hour, minute }, allowWhileIdle: true },
       },
     ],
@@ -118,7 +136,8 @@ const scheduleDailyNotification = async (
 const scheduleOneTimeNotification = async (
   medicine: Medicine,
   time: string,
-  scheduledTime: Date
+  scheduledTime: Date,
+  soundChoice: ReminderSound
 ): Promise<number | null> => {
   const dateKey = scheduledTime.toISOString().slice(0, 10)
   const notificationId = generateNotificationId(medicine.id, `${time}-${dateKey}`)
@@ -127,7 +146,7 @@ const scheduleOneTimeNotification = async (
     notifications: [
       {
         id: notificationId,
-        ...notificationBase(medicine, time),
+        ...notificationBase(medicine, time, soundChoice),
         schedule: { at: scheduledTime, allowWhileIdle: true },
       },
     ],
@@ -137,7 +156,9 @@ const scheduleOneTimeNotification = async (
   return notificationId
 }
 
-export const scheduleTestNotification = async (): Promise<boolean> => {
+export const scheduleTestNotification = async (
+  soundChoice: ReminderSound = selectedSound()
+): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return false
   const hasPermission = await requestNotificationPermission()
   if (!hasPermission) return false
@@ -148,19 +169,20 @@ export const scheduleTestNotification = async (): Promise<boolean> => {
     return false
   }
 
-  await ensureReminderChannel()
+  await ensureReminderChannel(soundChoice)
+  const option = getReminderSoundOption(soundChoice)
   await LocalNotifications.schedule({
     notifications: [
       {
         id: Math.floor(Date.now() % 2_000_000_000),
         title: 'Проверка напоминания',
-        body: 'Громкий звук и уведомления работают',
-        largeBody: 'Проверка завершена. Громкий звук, вибрация и уведомления работают.',
-        sound: REMINDER_SOUND,
-        channelId: REMINDER_CHANNEL_ID,
+        body: `Выбран сигнал: ${option.title}`,
+        largeBody: `Проверка завершена. Сигнал «${option.title}», вибрация и уведомления работают.`,
+        sound: option.resource,
+        channelId: getReminderChannelId(soundChoice),
         autoCancel: true,
         schedule: { at: new Date(Date.now() + 3000), allowWhileIdle: true },
-        extra: { test: true },
+        extra: { test: true, soundChoice },
       },
     ],
   })
@@ -259,9 +281,10 @@ export const scheduleNotificationsForMedicine = async (
   if (!isNativeNotificationsAvailable() || !medicine?.name) return []
   if (medicine.frequency === 'as_needed') return []
 
+  const soundChoice = selectedSound()
   const hasPermission = await requestNotificationPermission()
   if (!hasPermission) return []
-  await ensureReminderChannel()
+  await ensureReminderChannel(soundChoice)
   await cancelAllNotificationsForMedicine(medicine.id)
 
   const times = medicine.customTimes && medicine.customTimes.length > 0
@@ -273,11 +296,11 @@ export const scheduleNotificationsForMedicine = async (
     if (medicine.frequency === 'every_other') {
       const occurrences = getEveryOtherOccurrences(medicine, time)
       for (const occurrence of occurrences) {
-        const id = await scheduleOneTimeNotification(medicine, time, occurrence)
+        const id = await scheduleOneTimeNotification(medicine, time, occurrence, soundChoice)
         if (id !== null) ids.push(id)
       }
     } else {
-      const id = await scheduleDailyNotification(medicine, time)
+      const id = await scheduleDailyNotification(medicine, time, soundChoice)
       if (id !== null) ids.push(id)
     }
   }

@@ -1,4 +1,11 @@
 import { create } from 'zustand'
+import {
+  defaultReminderSound,
+  isReminderSound,
+  isVoiceRate,
+  type ReminderSound,
+  type VoiceRate,
+} from '@/features/sound/options'
 
 export type Theme = 'light' | 'dark' | 'high-contrast'
 export type TextSize = 'small' | 'medium' | 'large' | 'extra-large'
@@ -10,7 +17,9 @@ export type PersistedSettings = {
   font: Font
   reduceAnimations: boolean
   soundEnabled: boolean
+  soundChoice: ReminderSound
   voiceEnabled: boolean
+  voiceRate: VoiceRate
   pushNotificationsEnabled: boolean
 }
 
@@ -20,7 +29,9 @@ interface SettingsStore extends PersistedSettings {
   setFont: (font: Font) => void
   setReduceAnimations: (reduce: boolean) => void
   setSoundEnabled: (enabled: boolean) => void
+  setSoundChoice: (sound: ReminderSound) => void
   setVoiceEnabled: (enabled: boolean) => void
+  setVoiceRate: (rate: VoiceRate) => void
   setPushNotificationsEnabled: (enabled: boolean) => void
   replaceSettings: (settings: Partial<PersistedSettings>) => void
   saveToDB: () => void
@@ -35,7 +46,9 @@ const defaults: PersistedSettings = {
   font: 'system',
   reduceAnimations: false,
   soundEnabled: true,
+  soundChoice: defaultReminderSound,
   voiceEnabled: true,
+  voiceRate: 'slow',
   pushNotificationsEnabled: true,
 }
 
@@ -56,8 +69,26 @@ function normalizeSettings(value: unknown): PersistedSettings {
     font: validFonts.includes(legacyFont as Font) ? (legacyFont as Font) : 'system',
     reduceAnimations: candidate.reduceAnimations === true,
     soundEnabled: candidate.soundEnabled !== false,
+    soundChoice: isReminderSound(candidate.soundChoice)
+      ? candidate.soundChoice
+      : defaultReminderSound,
     voiceEnabled: candidate.voiceEnabled !== false,
+    voiceRate: isVoiceRate(candidate.voiceRate) ? candidate.voiceRate : defaults.voiceRate,
     pushNotificationsEnabled: candidate.pushNotificationsEnabled !== false,
+  }
+}
+
+function snapshot(state: PersistedSettings): PersistedSettings {
+  return {
+    theme: state.theme,
+    textSize: state.textSize,
+    font: state.font,
+    reduceAnimations: state.reduceAnimations,
+    soundEnabled: state.soundEnabled,
+    soundChoice: state.soundChoice,
+    voiceEnabled: state.voiceEnabled,
+    voiceRate: state.voiceRate,
+    pushNotificationsEnabled: state.pushNotificationsEnabled,
   }
 }
 
@@ -69,16 +100,7 @@ function persist(settings: PersistedSettings): void {
 export const useSettingsStore = create<SettingsStore>((set, get) => {
   const update = (partial: Partial<PersistedSettings>) => {
     set(partial)
-    const state = get()
-    persist({
-      theme: state.theme,
-      textSize: state.textSize,
-      font: state.font,
-      reduceAnimations: state.reduceAnimations,
-      soundEnabled: state.soundEnabled,
-      voiceEnabled: state.voiceEnabled,
-      pushNotificationsEnabled: state.pushNotificationsEnabled,
-    })
+    persist(snapshot(get()))
   }
 
   return {
@@ -88,22 +110,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setFont: (font) => update({ font }),
     setReduceAnimations: (reduceAnimations) => update({ reduceAnimations }),
     setSoundEnabled: (soundEnabled) => update({ soundEnabled }),
+    setSoundChoice: (soundChoice) => update({ soundChoice }),
     setVoiceEnabled: (voiceEnabled) => update({ voiceEnabled }),
+    setVoiceRate: (voiceRate) => update({ voiceRate }),
     setPushNotificationsEnabled: (pushNotificationsEnabled) =>
       update({ pushNotificationsEnabled }),
     replaceSettings: (settings) => update(normalizeSettings({ ...get(), ...settings })),
-    saveToDB: () => {
-      const state = get()
-      persist({
-        theme: state.theme,
-        textSize: state.textSize,
-        font: state.font,
-        reduceAnimations: state.reduceAnimations,
-        soundEnabled: state.soundEnabled,
-        voiceEnabled: state.voiceEnabled,
-        pushNotificationsEnabled: state.pushNotificationsEnabled,
-      })
-    },
+    saveToDB: () => persist(snapshot(get())),
     loadFromDB: () => {
       if (typeof window === 'undefined') return
       try {

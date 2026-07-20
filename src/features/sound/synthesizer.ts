@@ -1,6 +1,10 @@
 import { handleVoiceError } from '@/lib/errorHandler'
 
-export const speakText = async (text: string, lang = 'ru-RU'): Promise<void> => {
+export const speakText = async (
+  text: string,
+  lang = 'ru-RU',
+  rate = 0.88
+): Promise<void> => {
   if (typeof window === 'undefined') return
 
   try {
@@ -10,7 +14,7 @@ export const speakText = async (text: string, lang = 'ru-RU'): Promise<void> => 
 
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = lang
-    utterance.rate = 0.88
+    utterance.rate = Math.max(0.5, Math.min(1.2, rate))
     utterance.pitch = 1
     utterance.volume = 1
 

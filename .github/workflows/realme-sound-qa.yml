@@ -1,0 +1,161 @@
+name: realme C55 Android 12 sound QA
+
+on:
+  pull_request:
+    branches:
+      - claude/setup-documentation-uVAKM
+    paths:
+      - '.github/workflows/realme-sound-qa.yml'
+      - 'qa/android/**'
+      - 'src/**'
+      - 'scripts/**'
+      - 'android/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: npm run type-check
+
+      - name: Export and sync Android
+        run: npm run android:sync
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace --console=plain
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pills-realme-sound-fix-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+  emulator-qa:
+    needs: build-apk
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: pills-realme-sound-fix-apk
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Boot Android 12 emulator
+        id: emulator
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          RESULT_DIR="qa-results/realme-c55-android12-sound-fix"
+          mkdir -p "${RESULT_DIR}/logs"
+          SYSTEM_IMAGE="system-images;android-31;google_apis;x86_64"
+          AVD_NAME="qa-realme-c55-api31"
+          SDKMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          AVDMANAGER="$(find -L "${ANDROID_HOME}/cmdline-tools" -type f -name avdmanager 2>/dev/null | sort | tail -n 1)"
+          EMULATOR="${ANDROID_HOME}/emulator/emulator"
+          ADB="${ANDROID_HOME}/platform-tools/adb"
+
+          {
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            echo "SYSTEM_IMAGE=${SYSTEM_IMAGE}"
+            yes | "${SDKMANAGER}" --licenses >/dev/null || true
+            "${SDKMANAGER}" "platform-tools" "emulator" "${SYSTEM_IMAGE}"
+            echo no | "${AVDMANAGER}" create avd --force --name "${AVD_NAME}" --package "${SYSTEM_IMAGE}" --device "pixel_2"
+          } 2>&1 | tee "${RESULT_DIR}/logs/emulator-setup.txt"
+
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:$(dirname "${SDKMANAGER}"):${PATH}"
+          nohup "${EMULATOR}" \
+            -avd "${AVD_NAME}" \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            -memory 4096 \
+            -cores 2 \
+            > "${RESULT_DIR}/logs/emulator-runtime.txt" 2>&1 &
+
+          BOOTED=0
+          for attempt in $(seq 1 72); do
+            "${ADB}" devices -l | tee "${RESULT_DIR}/logs/adb-devices-latest.txt"
+            if "${ADB}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then
+              BOOTED=1
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "${BOOTED}" -ne 1 ]; then
+            echo "Эмулятор Android 12 не загрузился." > "${RESULT_DIR}/crash-message.txt"
+            exit 1
+          fi
+          "${ADB}" shell input keyevent 82 || true
+          echo "Эмулятор Android 12 загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
+
+      - name: Run realme sound and layout scenario
+        id: qa
+        if: steps.emulator.outcome == 'success'
+        continue-on-error: true
+        run: |
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
+          chmod +x qa/android/run_realme_sound_qa.sh qa/android/ui_pick.py qa/android/assert_realme_layout.py
+          bash qa/android/run_realme_sound_qa.sh apk/app-debug.apk
+
+      - name: Record emulator infrastructure failure
+        if: steps.emulator.outcome != 'success'
+        run: |
+          RESULT_DIR="qa-results/realme-c55-android12-sound-fix"
+          mkdir -p "${RESULT_DIR}/logs"
+          echo "Тест приложения не начался: эмулятор Android 12 не загрузился." > "${RESULT_DIR}/summary.md"
+          echo "Действия с приложением не выполнялись." > "${RESULT_DIR}/actions.txt"
+          test -f "${RESULT_DIR}/crash-message.txt" || echo "APK не запускался." > "${RESULT_DIR}/crash-message.txt"
+
+      - name: Upload realme QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-realme-c55-android12-sound-fix
+          path: qa-results/realme-c55-android12-sound-fix
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail after evidence upload
+        if: steps.emulator.outcome != 'success' || steps.qa.outcome == 'failure'
+        run: exit 1

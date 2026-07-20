@@ -68,10 +68,12 @@ export const useAddMedicineUI = create<AddMedicineUIStore>((set) => ({
   setDosage: (dosage) => set({ dosage }),
   setSoundChoice: (soundChoice) => set({ soundChoice }),
   setVolumeChoice: (volumeChoice) => set({ volumeChoice }),
-  setVoiceEnabled: (voiceEnabled) => set({
+  setVoiceEnabled: (voiceEnabled) => set((state) => ({
     voiceEnabled,
-    voiceMode: voiceEnabled ? 'android' : 'off',
-  }),
+    voiceMode: voiceEnabled
+      ? state.voiceMode === 'off' ? 'android' : state.voiceMode
+      : 'off',
+  })),
   setVoiceMode: (voiceMode) => set({
     voiceMode,
     voiceEnabled: voiceMode !== 'off',

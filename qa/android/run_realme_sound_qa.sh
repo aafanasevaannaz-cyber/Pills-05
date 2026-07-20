@@ -4,7 +4,7 @@ set -u
 APK_PATH="${1:-apk/app-debug.apk}"
 PACKAGE="com.moi.tabletki.reminder"
 COMPONENT="com.moi.tabletki.reminder/com.pills.reminder.MainActivity"
-RESULT_ROOT="qa-results/realme-c55-android12-loud-voice"
+RESULT_ROOT="qa-results/realme-c55-android12-sound-fix"
 SCREEN_DIR="${RESULT_ROOT}/screenshots"
 XML_DIR="${RESULT_ROOT}/ui-xml"
 LOG_DIR="${RESULT_ROOT}/logs"
@@ -165,7 +165,6 @@ python3 qa/android/assert_realme_layout.py "${XML_DIR}/08-home-with-medicine.xml
   --time "08:00" --medicine "TestMed" \
   > "${LOG_DIR}/layout-assertion.txt" 2>&1 || fail "Время и название накладываются"
 
-# Пропуск не должен входить в количество принятых доз.
 grep -F "statusForDose(dose) === 'taken'" src/components/screens/MainScreen.tsx >/dev/null \
   || fail "Прогресс не считает только принятые дозы"
 grep -F "Не принято: {skippedCount}" src/components/screens/MainScreen.tsx >/dev/null \

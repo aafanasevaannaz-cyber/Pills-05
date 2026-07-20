@@ -24,6 +24,7 @@ export interface Medicine {
   voiceEnabled?: boolean
   voiceMode?: VoiceMode
   voiceVolume?: ReminderVolume
+  customVoiceVolume?: ReminderVolume
   voiceRate?: VoiceRate
   customVoicePath?: string
   endDate?: Date

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import '@/styles/globals.css'
+import '@/styles/realme-fixes.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { BottomNav } from '@/components/BottomNav'
 

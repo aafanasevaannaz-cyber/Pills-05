@@ -4,8 +4,10 @@ import { formatDosage } from '@/lib/formatMedicine'
 import {
   defaultReminderSound,
   defaultReminderVolume,
+  defaultVoiceVolume,
   isReminderSound,
   isReminderVolume,
+  isVoiceMode,
   isVoiceRate,
 } from '@/features/sound/options'
 
@@ -25,20 +27,37 @@ const persistMedicines = (medicines: Medicine[]) => {
   localStorage.setItem('medicines', JSON.stringify(medicines))
 }
 
-const reviveMedicine = (medicine: Medicine): Medicine => ({
-  ...medicine,
-  dosage: formatDosage(String(medicine.dosage ?? '')),
-  reminderSound: isReminderSound(medicine.reminderSound)
-    ? medicine.reminderSound
-    : defaultReminderSound,
-  reminderVolume: isReminderVolume(medicine.reminderVolume)
-    ? medicine.reminderVolume
-    : defaultReminderVolume,
-  voiceEnabled: medicine.voiceEnabled !== false,
-  voiceRate: isVoiceRate(medicine.voiceRate) ? medicine.voiceRate : 'slow',
-  createdAt: new Date(medicine.createdAt),
-  endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
-})
+const reviveMedicine = (medicine: Medicine): Medicine => {
+  const voiceMode = isVoiceMode(medicine.voiceMode)
+    ? medicine.voiceMode
+    : medicine.voiceEnabled === false
+      ? 'off'
+      : medicine.customVoicePath
+        ? 'recorded'
+        : 'android'
+
+  return {
+    ...medicine,
+    dosage: formatDosage(String(medicine.dosage ?? '')),
+    reminderSound: isReminderSound(medicine.reminderSound)
+      ? medicine.reminderSound
+      : defaultReminderSound,
+    reminderVolume: isReminderVolume(medicine.reminderVolume)
+      ? medicine.reminderVolume
+      : defaultReminderVolume,
+    voiceEnabled: voiceMode !== 'off',
+    voiceMode,
+    voiceVolume: isReminderVolume(medicine.voiceVolume)
+      ? medicine.voiceVolume
+      : defaultVoiceVolume,
+    voiceRate: isVoiceRate(medicine.voiceRate) ? medicine.voiceRate : 'slow',
+    customVoicePath: typeof medicine.customVoicePath === 'string'
+      ? medicine.customVoicePath
+      : '',
+    createdAt: new Date(medicine.createdAt),
+    endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
+  }
+}
 
 export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
   medicines: [],

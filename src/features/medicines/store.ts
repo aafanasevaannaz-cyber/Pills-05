@@ -16,6 +16,7 @@ interface MedicinesStore {
   addMedicine: (medicine: Medicine) => void
   removeMedicine: (id: string) => void
   updateMedicine: (id: string, updates: Partial<Medicine>) => void
+  consumeStock: (id: string) => Medicine | null
   getMedicine: (id: string) => Medicine | null
   findByName: (name: string) => Medicine | null
   saveToDB: () => void
@@ -25,6 +26,16 @@ interface MedicinesStore {
 const persistMedicines = (medicines: Medicine[]) => {
   if (typeof window === 'undefined') return
   localStorage.setItem('medicines', JSON.stringify(medicines))
+}
+
+const positiveNumber = (value: unknown): number | undefined => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : undefined
+}
+
+const nonNegativeNumber = (value: unknown): number | undefined => {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : undefined
 }
 
 const reviveMedicine = (medicine: Medicine): Medicine => {
@@ -62,6 +73,10 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
       : '',
     createdAt: new Date(medicine.createdAt),
     endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
+    stockQuantity: nonNegativeNumber(medicine.stockQuantity),
+    unitsPerIntake: positiveNumber(medicine.unitsPerIntake),
+    refillReminderDays: nonNegativeNumber(medicine.refillReminderDays),
+    stockUpdatedAt: medicine.stockUpdatedAt ? new Date(medicine.stockUpdatedAt) : undefined,
   }
 }
 
@@ -90,6 +105,26 @@ export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
       persistMedicines(medicines)
       return { medicines }
     }),
+
+  consumeStock: (id) => {
+    let result: Medicine | null = null
+    set((state) => {
+      const medicines = state.medicines.map((medicine) => {
+        if (medicine.id !== id || medicine.stockQuantity === undefined) return medicine
+        const units = positiveNumber(medicine.unitsPerIntake) ?? 1
+        const updated = reviveMedicine({
+          ...medicine,
+          stockQuantity: Math.max(0, medicine.stockQuantity - units),
+          stockUpdatedAt: new Date(),
+        })
+        result = updated
+        return updated
+      })
+      persistMedicines(medicines)
+      return { medicines }
+    })
+    return result
+  },
 
   getMedicine: (id) => get().medicines.find((medicine) => medicine.id === id) || null,
 

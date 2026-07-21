@@ -1,4 +1,4 @@
-export type ReminderSound = 'gentle' | 'clear' | 'alarm'
+export type ReminderSound = 'gentle' | 'clear' | 'alarm' | 'chime' | 'wood' | 'pulse'
 export type ReminderVolume = 'normal' | 'loud' | 'maximum'
 export type VoiceRate = 'slow' | 'normal'
 export type VoiceMode = 'android' | 'recorded' | 'off'
@@ -23,6 +23,24 @@ export const reminderSoundOptions: ReminderSoundOption[] = [
     title: 'Мягкий звонок',
     description: 'Спокойный трёхтональный сигнал',
     previewDelayMs: 2550,
+  },
+  {
+    id: 'chime',
+    title: 'Стеклянные колокольчики',
+    description: 'Светлый перелив из трёх нот',
+    previewDelayMs: 1800,
+  },
+  {
+    id: 'wood',
+    title: 'Деревянный стук',
+    description: 'Короткий тёплый ритм без писка',
+    previewDelayMs: 1450,
+  },
+  {
+    id: 'pulse',
+    title: 'Мягкий импульс',
+    description: 'Ровные округлые звуковые волны',
+    previewDelayMs: 2100,
   },
   {
     id: 'clear',
@@ -64,7 +82,8 @@ export const defaultReminderVolume: ReminderVolume = 'maximum'
 export const defaultVoiceVolume: ReminderVolume = 'maximum'
 
 export function isReminderSound(value: unknown): value is ReminderSound {
-  return value === 'gentle' || value === 'clear' || value === 'alarm'
+  return value === 'gentle' || value === 'clear' || value === 'alarm' ||
+    value === 'chime' || value === 'wood' || value === 'pulse'
 }
 
 export function isReminderVolume(value: unknown): value is ReminderVolume {
@@ -76,7 +95,7 @@ export function isVoiceMode(value: unknown): value is VoiceMode {
 }
 
 export function getReminderSoundOption(sound: ReminderSound): ReminderSoundOption {
-  return reminderSoundOptions.find((option) => option.id === sound) ?? reminderSoundOptions[2]
+  return reminderSoundOptions.find((option) => option.id === sound) ?? reminderSoundOptions[5]
 }
 
 export function getReminderVolumeOption(volume: ReminderVolume): ReminderVolumeOption {
@@ -92,7 +111,7 @@ export function getReminderWebUrl(sound: ReminderSound, volume: ReminderVolume):
 }
 
 export function getReminderChannelId(sound: ReminderSound, volume: ReminderVolume): string {
-  return `medicine-reminders-v8-${sound}-${volume}`
+  return `medicine-reminders-v9-${sound}-${volume}`
 }
 
 export function getVoiceRateValue(rate: VoiceRate): number {

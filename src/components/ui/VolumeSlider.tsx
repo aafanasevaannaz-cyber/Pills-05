@@ -19,6 +19,8 @@ interface VolumeSliderProps {
   label: string
   value: ReminderVolume
   onChange: (value: ReminderVolume) => void
+  onPreview?: (value: ReminderVolume) => Promise<void> | void
+  previewHint?: string
   help?: string
   disabled?: boolean
 }
@@ -27,14 +29,14 @@ const volumeSteps: ReminderVolume[] = reminderVolumeOptions.map((option) => opti
 let previewTimer: number | undefined
 let previewGeneration = 0
 
-const scheduleAudioPreview = (play: () => Promise<void>) => {
+const scheduleAudioPreview = (play: () => Promise<void> | void) => {
   if (typeof window === 'undefined') return
   const generation = ++previewGeneration
   if (previewTimer) window.clearTimeout(previewTimer)
   void stopReminderPreview()
   previewTimer = window.setTimeout(() => {
     if (generation !== previewGeneration) return
-    void play().catch((error) => {
+    void Promise.resolve(play()).catch((error) => {
       console.error('Live volume preview failed:', error)
     })
   }, 120)
@@ -45,6 +47,8 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
   label,
   value,
   onChange,
+  onPreview,
+  previewHint,
   help,
   disabled = false,
 }) => {
@@ -69,24 +73,26 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
   }, [id])
 
   const previewValue = (next: ReminderVolume) => {
-    const state = useAddMedicineUI.getState()
+    if (onPreview) {
+      scheduleAudioPreview(() => onPreview(next))
+      return
+    }
 
+    const state = useAddMedicineUI.getState()
     if (id === 'medicine-signal-volume') {
       scheduleAudioPreview(() => previewReminderSound(state.soundChoice, next))
       return
     }
-
     if (id === 'medicine-android-voice-volume') {
       scheduleAudioPreview(() => previewReminderVoice('Тест', '', state.voiceRate, next))
       return
     }
-
     if (id === 'medicine-recorded-voice-volume' && state.customVoicePath) {
       scheduleAudioPreview(() => previewCustomVoice(state.customVoicePath, next))
     }
   }
 
-  const previewHint = id === 'medicine-recorded-voice-volume' && !customVoicePath
+  const fallbackHint = id === 'medicine-recorded-voice-volume' && !customVoicePath
     ? 'После записи двигайте бегунок — голос прозвучит с новой громкостью.'
     : 'Двигайте бегунок — выбранная громкость прозвучит сразу.'
 
@@ -97,7 +103,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
         <strong className="volume-slider__value">{selected.title}</strong>
       </div>
       {help && <p className="muted volume-slider__help">{help}</p>}
-      <p className="muted volume-slider__help">{previewHint}</p>
+      <p className="muted volume-slider__help">{previewHint ?? fallbackHint}</p>
       <input
         id={id}
         className="volume-slider__input"

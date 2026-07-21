@@ -27,8 +27,8 @@ android {
         applicationId "com.moi.tabletki.reminder.safe"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.5-live-preview"
+        versionCode 3
+        versionName "1.6-smart-course"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

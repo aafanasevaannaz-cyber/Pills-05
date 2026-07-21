@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from 'next'
 import '@/styles/globals.css'
 import '@/styles/realme-fixes.css'
 import '@/styles/reminders.css'
+import '@/styles/soft-contrast.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { DiagnosticsProvider } from '@/components/DiagnosticsProvider'
 import { BottomNav } from '@/components/BottomNav'
 
 export const metadata: Metadata = {
@@ -25,12 +27,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ru" suppressHydrationWarning>
       <body>
-        <ThemeProvider>
-          <div className="app-frame">
-            <main>{children}</main>
-            <BottomNav />
-          </div>
-        </ThemeProvider>
+        <DiagnosticsProvider>
+          <ThemeProvider>
+            <div className="app-frame">
+              <main>{children}</main>
+              <BottomNav />
+            </div>
+          </ThemeProvider>
+        </DiagnosticsProvider>
       </body>
     </html>
   )

@@ -28,6 +28,10 @@ export interface Medicine {
   voiceRate?: VoiceRate
   customVoicePath?: string
   endDate?: Date
+  stockQuantity?: number
+  unitsPerIntake?: number
+  refillReminderDays?: number
+  stockUpdatedAt?: Date
   createdAt: Date
   notes?: string
 }

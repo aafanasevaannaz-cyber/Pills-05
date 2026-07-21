@@ -2,11 +2,14 @@ import { create } from 'zustand'
 import {
   defaultReminderSound,
   defaultReminderVolume,
+  defaultVoiceVolume,
   isReminderSound,
   isReminderVolume,
+  isVoiceMode,
   isVoiceRate,
   type ReminderSound,
   type ReminderVolume,
+  type VoiceMode,
   type VoiceRate,
 } from '@/features/sound/options'
 
@@ -23,6 +26,10 @@ export type PersistedSettings = {
   soundChoice: ReminderSound
   volumeChoice: ReminderVolume
   voiceEnabled: boolean
+  defaultVoiceMode: VoiceMode
+  voiceVolume: ReminderVolume
+  customVoiceVolume: ReminderVolume
+  customVoicePath: string
   voiceRate: VoiceRate
   pushNotificationsEnabled: boolean
 }
@@ -36,6 +43,10 @@ interface SettingsStore extends PersistedSettings {
   setSoundChoice: (sound: ReminderSound) => void
   setVolumeChoice: (volume: ReminderVolume) => void
   setVoiceEnabled: (enabled: boolean) => void
+  setDefaultVoiceMode: (mode: VoiceMode) => void
+  setVoiceVolume: (volume: ReminderVolume) => void
+  setCustomVoiceVolume: (volume: ReminderVolume) => void
+  setCustomVoicePath: (path: string) => void
   setVoiceRate: (rate: VoiceRate) => void
   setPushNotificationsEnabled: (enabled: boolean) => void
   replaceSettings: (settings: Partial<PersistedSettings>) => void
@@ -54,6 +65,10 @@ const defaults: PersistedSettings = {
   soundChoice: defaultReminderSound,
   volumeChoice: defaultReminderVolume,
   voiceEnabled: true,
+  defaultVoiceMode: 'android',
+  voiceVolume: defaultVoiceVolume,
+  customVoiceVolume: defaultVoiceVolume,
+  customVoicePath: '',
   voiceRate: 'slow',
   pushNotificationsEnabled: true,
 }
@@ -66,6 +81,15 @@ function normalizeSettings(value: unknown): PersistedSettings {
   if (!value || typeof value !== 'object') return defaults
   const candidate = value as Record<string, unknown>
   const legacyFont = typeof candidate.font === 'string' ? candidate.font : 'system'
+  const customVoicePath = typeof candidate.customVoicePath === 'string' ? candidate.customVoicePath : ''
+  const requestedMode = isVoiceMode(candidate.defaultVoiceMode)
+    ? candidate.defaultVoiceMode
+    : candidate.voiceEnabled === false
+      ? 'off'
+      : customVoicePath
+        ? 'recorded'
+        : 'android'
+  const defaultVoiceMode = requestedMode === 'recorded' && !customVoicePath ? 'android' : requestedMode
 
   return {
     theme: validThemes.includes(candidate.theme as Theme) ? (candidate.theme as Theme) : defaults.theme,
@@ -81,7 +105,15 @@ function normalizeSettings(value: unknown): PersistedSettings {
     volumeChoice: isReminderVolume(candidate.volumeChoice)
       ? candidate.volumeChoice
       : defaultReminderVolume,
-    voiceEnabled: candidate.voiceEnabled !== false,
+    voiceEnabled: defaultVoiceMode !== 'off',
+    defaultVoiceMode,
+    voiceVolume: isReminderVolume(candidate.voiceVolume)
+      ? candidate.voiceVolume
+      : defaultVoiceVolume,
+    customVoiceVolume: isReminderVolume(candidate.customVoiceVolume)
+      ? candidate.customVoiceVolume
+      : defaultVoiceVolume,
+    customVoicePath,
     voiceRate: isVoiceRate(candidate.voiceRate) ? candidate.voiceRate : defaults.voiceRate,
     pushNotificationsEnabled: candidate.pushNotificationsEnabled !== false,
   }
@@ -96,7 +128,11 @@ function snapshot(state: PersistedSettings): PersistedSettings {
     soundEnabled: state.soundEnabled,
     soundChoice: state.soundChoice,
     volumeChoice: state.volumeChoice,
-    voiceEnabled: state.voiceEnabled,
+    voiceEnabled: state.defaultVoiceMode !== 'off',
+    defaultVoiceMode: state.defaultVoiceMode,
+    voiceVolume: state.voiceVolume,
+    customVoiceVolume: state.customVoiceVolume,
+    customVoicePath: state.customVoicePath,
     voiceRate: state.voiceRate,
     pushNotificationsEnabled: state.pushNotificationsEnabled,
   }
@@ -122,7 +158,23 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setSoundEnabled: (soundEnabled) => update({ soundEnabled }),
     setSoundChoice: (soundChoice) => update({ soundChoice }),
     setVolumeChoice: (volumeChoice) => update({ volumeChoice }),
-    setVoiceEnabled: (voiceEnabled) => update({ voiceEnabled }),
+    setVoiceEnabled: (voiceEnabled) => update({
+      voiceEnabled,
+      defaultVoiceMode: voiceEnabled
+        ? get().defaultVoiceMode === 'off' ? 'android' : get().defaultVoiceMode
+        : 'off',
+    }),
+    setDefaultVoiceMode: (defaultVoiceMode) => update({
+      defaultVoiceMode,
+      voiceEnabled: defaultVoiceMode !== 'off',
+    }),
+    setVoiceVolume: (voiceVolume) => update({ voiceVolume }),
+    setCustomVoiceVolume: (customVoiceVolume) => update({ customVoiceVolume }),
+    setCustomVoicePath: (customVoicePath) => update({
+      customVoicePath,
+      defaultVoiceMode: customVoicePath ? get().defaultVoiceMode : get().defaultVoiceMode === 'recorded' ? 'android' : get().defaultVoiceMode,
+      voiceEnabled: customVoicePath ? get().voiceEnabled : get().defaultVoiceMode === 'recorded' ? true : get().voiceEnabled,
+    }),
     setVoiceRate: (voiceRate) => update({ voiceRate }),
     setPushNotificationsEnabled: (pushNotificationsEnabled) =>
       update({ pushNotificationsEnabled }),

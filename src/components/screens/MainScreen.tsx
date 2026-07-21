@@ -10,6 +10,7 @@ import { useHistoryStore } from '@/features/history/store'
 import { useRemindersStore } from '@/features/reminders/store'
 import { startScheduler, stopScheduler } from '@/features/reminders/scheduler'
 import { formatDosage, formatFrequency, getMedicineTimes } from '@/lib/formatMedicine'
+import { formatStockDays, isRefillSoon } from '@/lib/stock'
 import {
   defaultReminderSound,
   defaultReminderVolume,
@@ -23,13 +24,21 @@ const sameDay = (first: Date, second: Date) =>
 
 const isMedicineScheduledOn = (medicine: Medicine, date: Date) => {
   if (medicine.frequency === 'as_needed') return false
-  if (medicine.frequency === 'daily') return true
-
+  const target = new Date(date)
+  target.setHours(12, 0, 0, 0)
   const created = new Date(medicine.createdAt)
   created.setHours(0, 0, 0, 0)
-  const target = new Date(date)
-  target.setHours(0, 0, 0, 0)
-  const days = Math.round((target.getTime() - created.getTime()) / 86_400_000)
+  if (target.getTime() < created.getTime()) return false
+  if (medicine.endDate) {
+    const end = new Date(medicine.endDate)
+    end.setHours(23, 59, 59, 999)
+    if (target.getTime() > end.getTime()) return false
+  }
+  if (medicine.frequency === 'daily') return true
+
+  const targetDay = new Date(target)
+  targetDay.setHours(0, 0, 0, 0)
+  const days = Math.round((targetDay.getTime() - created.getTime()) / 86_400_000)
   return Math.abs(days) % 2 === 0
 }
 
@@ -38,6 +47,12 @@ const dateAtTime = (day: Date, time: string) => {
   const result = new Date(day)
   result.setHours(hour, minute, 0, 0)
   return result
+}
+
+const formatEndDate = (value?: Date) => {
+  if (!value) return null
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    .format(new Date(value))
 }
 
 type Dose = {
@@ -54,11 +69,13 @@ type ActionMessage = {
 
 export const MainScreen: React.FC = () => {
   const medicines = useMedicinesStore((state) => state.medicines)
+  const consumeStock = useMedicinesStore((state) => state.consumeStock)
   const history = useHistoryStore((state) => state.history)
   const activeReminder = useRemindersStore((state) => state.activeReminder)
   const markTaken = useRemindersStore((state) => state.markTaken)
   const markSkipped = useRemindersStore((state) => state.markSkipped)
   const delayReminder = useRemindersStore((state) => state.delayReminder)
+  const syncReminderForMedicine = useRemindersStore((state) => state.syncReminderForMedicine)
   const addEntry = useHistoryStore((state) => state.addEntry)
   const [actionMessage, setActionMessage] = useState<ActionMessage | null>(null)
   const now = new Date()
@@ -89,6 +106,11 @@ export const MainScreen: React.FC = () => {
       )
       .sort((first, second) => first.scheduledFor.getTime() - second.scheduledFor.getTime())
   }, [medicines])
+
+  const lowStockMedicines = useMemo(
+    () => medicines.filter((medicine) => medicine.stockQuantity !== undefined && isRefillSoon(medicine)),
+    [medicines]
+  )
 
   const todayHistory = useMemo(
     () => history.filter((entry) => sameDay(new Date(entry.scheduledFor), now)),
@@ -133,14 +155,24 @@ export const MainScreen: React.FC = () => {
 
   const showMessage = (text: string, tone: ActionMessage['tone']) => {
     setActionMessage({ text, tone })
-    window.setTimeout(() => setActionMessage(null), 2600)
+    window.setTimeout(() => setActionMessage(null), 3000)
   }
 
   const handleTaken = () => {
     if (!activeReminder) return
+    const medicineId = activeReminder.medicineId
     addHistoryEntry('taken')
     markTaken(activeReminder.id)
-    showMessage('Приём отмечен как принятый', 'success')
+    const updatedMedicine = consumeStock(medicineId)
+    if (updatedMedicine) {
+      void syncReminderForMedicine(updatedMedicine).catch((error) => {
+        console.error('Stock refill reminder reschedule failed:', error)
+      })
+      const stock = updatedMedicine.stockQuantity ?? 0
+      showMessage(`Приём отмечен. Осталось: ${stock}`, stock <= 0 ? 'warning' : 'success')
+    } else {
+      showMessage('Приём отмечен как принятый', 'success')
+    }
   }
 
   const handleSkipped = () => {
@@ -186,6 +218,20 @@ export const MainScreen: React.FC = () => {
           </div>
         )}
 
+        {lowStockMedicines.length > 0 && (
+          <Card className="ui-card--warning" style={{ marginBottom: 18 }}>
+            <h2 className="section-title">Скоро понадобится пополнить запас</h2>
+            <div className="stock-warning-list">
+              {lowStockMedicines.map((medicine) => (
+                <div className="stock-warning-item" key={medicine.id}>
+                  <strong>{medicine.name}</strong>
+                  <span>{medicine.stockQuantity ?? 0} · {formatStockDays(medicine)}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {todayDoses.length > 0 && (
           <Card className="progress-card ui-card--soft">
             <div className="progress-row">
@@ -222,13 +268,15 @@ export const MainScreen: React.FC = () => {
                 <Card className="ui-card--soft">
                   <strong>На сегодня приёмов нет</strong>
                   <p className="muted">
-                    Ближайший приём появится здесь в день, когда лекарство запланировано.
+                    Возможно, сегодня день без приёма или курс уже закончился.
                   </p>
                 </Card>
               ) : (
                 <div className="medicine-list">
                   {todayDoses.map((dose) => {
                     const status = statusForDose(dose)
+                    const stockText = formatStockDays(dose.medicine)
+                    const endText = formatEndDate(dose.medicine.endDate)
                     const statusLabel =
                       status === 'taken' ? 'Принято' :
                       status === 'skipped' ? 'Не принято' :
@@ -247,6 +295,8 @@ export const MainScreen: React.FC = () => {
                             <p className="medicine-details">
                               {formatDosage(dose.medicine.dosage)} · {formatFrequency(dose.medicine.frequency)}
                             </p>
+                            {stockText && <p className="medicine-details">Запас: {dose.medicine.stockQuantity} · {stockText}</p>}
+                            {endText && <p className="medicine-details">Курс до {endText}</p>}
                             <span className="medicine-badge">{statusLabel}</span>
                           </div>
                         </div>
@@ -267,6 +317,12 @@ export const MainScreen: React.FC = () => {
                     <div className="reminder-meta">
                       <span><strong>Время:</strong> {nextDose.time}</span>
                       <span><strong>Дозировка:</strong> {formatDosage(nextDose.medicine.dosage)}</span>
+                      {nextDose.medicine.stockQuantity !== undefined && (
+                        <span><strong>Осталось:</strong> {nextDose.medicine.stockQuantity}</span>
+                      )}
+                      {nextDose.medicine.endDate && (
+                        <span><strong>Курс до:</strong> {formatEndDate(nextDose.medicine.endDate)}</span>
+                      )}
                     </div>
                   </Card>
                 ) : (

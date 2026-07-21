@@ -1,0 +1,35 @@
+.global-back-button {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+
+.progress-track + .ui-card .form-actions {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+
+.settings-tabs {
+  background: var(--app-bg);
+  background: color-mix(in srgb, var(--app-bg) 93%, transparent);
+}
+
+/* Шесть вариантов курса занимают три строки, а не шесть длинных карточек. */
+.optional-card > .choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.optional-card > .choice-grid .choice {
+  padding: 10px;
+  min-height: 54px;
+}
+
+.optional-card > .choice-grid .choice__description {
+  font-size: 0.78rem;
+}
+
+@media (max-width: 360px) {
+  .optional-card > .choice-grid {
+    grid-template-columns: 1fr;
+  }
+}

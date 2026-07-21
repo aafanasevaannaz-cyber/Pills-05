@@ -4,24 +4,24 @@
 
 :root {
   color-scheme: light;
-  --app-bg: #f4f1ea;
-  --surface: #ffffff;
-  --surface-soft: #fbf8f2;
-  --surface-strong: #ebe5d9;
-  --text: #1d211e;
-  --text-muted: #5e665f;
-  --border: #d7d3c9;
-  --primary: #2f6b4f;
-  --primary-hover: #285b43;
-  --primary-text: #ffffff;
-  --success: #287a50;
-  --success-soft: #e3f2e9;
-  --warning: #8a5a00;
-  --warning-soft: #fff2cf;
-  --danger: #9b3535;
-  --danger-soft: #f8e4e2;
-  --focus: #0b6fd3;
-  --shadow: 0 10px 30px rgba(35, 39, 35, 0.08);
+  --app-bg: #d9d2c7;
+  --surface: #e5ded3;
+  --surface-soft: #ddd6cb;
+  --surface-strong: #cec6ba;
+  --text: #262a26;
+  --text-muted: #565d55;
+  --border: #b8b0a4;
+  --primary: #476a58;
+  --primary-hover: #3d594b;
+  --primary-text: #f3efe7;
+  --success: #47735b;
+  --success-soft: #cbd9cf;
+  --warning: #755d35;
+  --warning-soft: #ded2bd;
+  --danger: #82504d;
+  --danger-soft: #ddc8c5;
+  --focus: #566f82;
+  --shadow: 0 8px 22px rgba(41, 38, 33, 0.08);
   --font-size-base: 18px;
   --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --radius: 22px;
@@ -35,46 +35,46 @@
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --app-bg: #141816;
-  --surface: #202622;
-  --surface-soft: #252d28;
-  --surface-strong: #313a34;
-  --text: #f4f6f4;
-  --text-muted: #c1c8c2;
-  --border: #4a554d;
-  --primary: #79c99e;
-  --primary-hover: #8dd8b0;
-  --primary-text: #102118;
-  --success: #8ad7aa;
-  --success-soft: #1d3a2a;
-  --warning: #ffd27a;
-  --warning-soft: #3d321a;
-  --danger: #ff9d97;
-  --danger-soft: #452726;
-  --focus: #8bc5ff;
-  --shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  --app-bg: #151714;
+  --surface: #1d201c;
+  --surface-soft: #242821;
+  --surface-strong: #2d322a;
+  --text: #d8dad3;
+  --text-muted: #aeb3aa;
+  --border: #454b43;
+  --primary: #86a792;
+  --primary-hover: #96b5a1;
+  --primary-text: #142018;
+  --success: #87ae94;
+  --success-soft: #26362b;
+  --warning: #c5aa79;
+  --warning-soft: #3a3325;
+  --danger: #c88e89;
+  --danger-soft: #412d2c;
+  --focus: #8aa2b5;
+  --shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
 }
 
 [data-theme='high-contrast'] {
   color-scheme: dark;
-  --app-bg: #000000;
-  --surface: #000000;
-  --surface-soft: #000000;
-  --surface-strong: #161616;
-  --text: #ffffff;
-  --text-muted: #ffffff;
-  --border: #ffffff;
-  --primary: #ffeb3b;
-  --primary-hover: #fff275;
-  --primary-text: #000000;
-  --success: #70ff9c;
-  --success-soft: #001d0b;
-  --warning: #ffe45c;
-  --warning-soft: #221c00;
-  --danger: #ff8c8c;
-  --danger-soft: #260000;
-  --focus: #00e5ff;
-  --shadow: none;
+  --app-bg: #18212a;
+  --surface: #202b35;
+  --surface-soft: #27333e;
+  --surface-strong: #33414c;
+  --text: #e1ddd4;
+  --text-muted: #c1bbb0;
+  --border: #74818b;
+  --primary: #a0b9a9;
+  --primary-hover: #b1c8b9;
+  --primary-text: #16211b;
+  --success: #9ab9a3;
+  --success-soft: #293b30;
+  --warning: #c7ad7f;
+  --warning-soft: #3e3527;
+  --danger: #c99792;
+  --danger-soft: #432f30;
+  --focus: #9fb5c5;
+  --shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
 }
 
 [data-text-size='small'] { --font-size-base: 16px; --tap-size: 52px; }
@@ -177,323 +177,4 @@ textarea:focus-visible {
   letter-spacing: -0.035em;
   overflow-wrap: break-word;
   word-break: break-word;
-}
-
-.app-subtitle {
-  margin: 8px 0 0;
-  color: var(--text-muted);
-  font-size: 1rem;
-}
-
-.section-title {
-  margin: 0 0 12px;
-  font-size: 1.35rem;
-  line-height: 1.2;
-  font-weight: 800;
-}
-
-.ui-card {
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
-  padding: 16px;
-  padding: clamp(16px, 4vw, 24px);
-  min-width: 0;
-}
-
-.ui-card--soft { background: var(--surface-soft); }
-.ui-card--warning { background: var(--warning-soft); border-color: var(--warning); }
-.ui-card--success { background: var(--success-soft); border-color: var(--success); }
-.ui-card--danger { background: var(--danger-soft); border-color: var(--danger); }
-
-.ui-button {
-  appearance: none;
-  min-height: var(--tap-size);
-  min-width: 48px;
-  border: 2px solid transparent;
-  border-radius: 17px;
-  padding: 12px 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  text-decoration: none;
-  font-size: 1rem;
-  line-height: 1.18;
-  font-weight: 800;
-  cursor: pointer;
-  transition: transform var(--animation-duration), background var(--animation-duration), opacity var(--animation-duration);
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  overflow-wrap: break-word;
-}
-
-.ui-button:active { transform: scale(0.985); }
-.ui-button:disabled { opacity: 0.48; cursor: not-allowed; transform: none; }
-.ui-button--full { width: 100%; }
-.ui-button--primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
-.ui-button--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-.ui-button--secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
-.ui-button--danger { background: var(--danger-soft); color: var(--text); border-color: var(--danger); }
-.ui-button--quiet { background: transparent; color: var(--text); border-color: transparent; }
-
-.ui-field { display: grid; gap: 8px; margin-bottom: 18px; }
-.ui-label { font-size: 1rem; font-weight: 780; }
-.ui-help { margin: 0; color: var(--text-muted); font-size: 0.9rem; }
-.ui-error { margin: 0; color: var(--danger); font-weight: 700; }
-.ui-input,
-.ui-select {
-  width: 100%;
-  min-height: var(--tap-size);
-  border: 2px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  padding: 12px 16px;
-  font-size: 1.08rem;
-}
-.ui-input::placeholder { color: var(--text-muted); opacity: 0.85; }
-
-.dashboard-grid {
-  display: grid;
-  grid-template-areas: "reminder" "schedule";
-  gap: 18px;
-}
-.dashboard-reminder { grid-area: reminder; min-width: 0; }
-.dashboard-schedule { grid-area: schedule; min-width: 0; }
-
-.status-strip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: 18px;
-  padding: 14px 16px;
-  background: var(--success-soft);
-  border: 2px solid var(--success);
-  font-weight: 750;
-  overflow-wrap: break-word;
-}
-
-.progress-card { margin-bottom: 18px; }
-.progress-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.progress-track { height: 12px; border-radius: 999px; background: var(--surface-strong); overflow: hidden; margin-top: 12px; }
-.progress-fill { height: 100%; border-radius: inherit; background: var(--primary); transition: width var(--animation-duration); }
-
-.reminder-hero {
-  display: grid;
-  gap: 16px;
-  background: var(--warning-soft);
-  border: 3px solid var(--warning);
-}
-.reminder-kicker { margin: 0; color: var(--warning); font-weight: 900; letter-spacing: 0.02em; }
-.reminder-name {
-  margin: 0;
-  font-size: 2rem;
-  font-size: clamp(2rem, 8vw, 3.8rem);
-  line-height: 1.02;
-  font-weight: 900;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-.reminder-meta { display: grid; gap: 6px; font-size: 1.08rem; }
-.reminder-actions { display: grid; gap: 12px; }
-.reminder-actions .ui-button:first-child { min-height: calc(var(--tap-size) + 16px); font-size: 1.25rem; }
-
-.medicine-list { display: grid; gap: 12px; }
-.medicine-row {
-  display: grid;
-  grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-.medicine-time { font-size: 1.35rem; font-weight: 900; font-variant-numeric: tabular-nums; }
-.medicine-name {
-  margin: 0;
-  font-size: 1.15rem;
-  line-height: 1.2;
-  font-weight: 850;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-.medicine-details { margin: 5px 0 0; color: var(--text-muted); overflow-wrap: break-word; }
-.medicine-badge { display: inline-flex; margin-top: 9px; padding: 5px 10px; border-radius: 999px; background: var(--surface-strong); font-size: 0.85rem; font-weight: 750; }
-
-.quick-actions { display: grid; gap: 10px; margin-top: 16px; }
-
-.bottom-nav {
-  position: fixed;
-  z-index: 40;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  min-height: calc(76px + var(--safe-bottom));
-  padding: 8px calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: var(--surface);
-  border-top: 2px solid var(--border);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
-}
-.bottom-nav__item {
-  min-width: 0;
-  min-height: 58px;
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 4px 2px;
-  text-align: center;
-  text-decoration: none;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.08;
-  font-weight: 750;
-  overflow-wrap: break-word;
-}
-[data-text-size='large'] .bottom-nav__item { font-size: 14px; }
-[data-text-size='extra-large'] .bottom-nav__item { font-size: 15px; }
-.bottom-nav__item.is-active { background: var(--surface-strong); color: var(--text); }
-.bottom-nav__icon { font-size: 20px; line-height: 1; }
-
-.choice-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.choice {
-  min-height: var(--tap-size);
-  border: 2px solid var(--border);
-  border-radius: 16px;
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  min-width: 0;
-  overflow-wrap: break-word;
-}
-.choice.is-selected { border-color: var(--primary); background: var(--success-soft); }
-.choice input { width: 24px; height: 24px; flex: 0 0 auto; accent-color: var(--primary); }
-.choice__text { display: grid; gap: 2px; min-width: 0; }
-.choice__title { font-weight: 820; }
-.choice__description { color: var(--text-muted); font-size: 0.88rem; }
-
-.form-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 20px; }
-.page-stack { display: grid; gap: 18px; min-width: 0; }
-.inline-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.muted { color: var(--text-muted); }
-.center { text-align: center; }
-.visually-hidden {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-}
-
-.reminder-overlay {
-  position: fixed;
-  z-index: 100;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  overflow-y: auto;
-  background: var(--app-bg);
-  padding: calc(20px + var(--safe-top)) calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(16px + var(--safe-left));
-  display: grid;
-  align-items: center;
-}
-.reminder-overlay__panel { width: 100%; max-width: 680px; margin: auto; }
-.reminder-bell { font-size: 3.4rem; line-height: 1; }
-
-@media (max-width: 430px) {
-  .app-header > .ui-button {
-    width: 100%;
-  }
-
-  .medicine-row {
-    grid-template-columns: 58px minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .ui-button {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-}
-
-@media (min-width: 560px) {
-  .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .form-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-/* Samsung Tab A11+ and Lenovo Tab M10 portrait: side navigation, one wide content column. */
-@media (min-width: 720px) and (min-height: 600px) {
-  .app-frame {
-    padding: 0 0 0 124px;
-    padding-left: calc(124px + var(--safe-left));
-    padding-bottom: 0;
-  }
-
-  .app-page {
-    padding: calc(24px + var(--safe-top)) calc(28px + var(--safe-right)) 44px 28px;
-  }
-
-  .bottom-nav {
-    top: 0;
-    right: auto;
-    bottom: 0;
-    width: calc(124px + var(--safe-left));
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding: calc(18px + var(--safe-top)) 10px calc(18px + var(--safe-bottom)) calc(10px + var(--safe-left));
-    grid-template-columns: 1fr;
-    grid-auto-rows: min-content;
-    align-content: center;
-    gap: 10px;
-    border-top: 0;
-    border-right: 2px solid var(--border);
-    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06);
-  }
-
-  .bottom-nav__item {
-    min-height: 74px;
-    font-size: 14px;
-  }
-
-  [data-text-size='extra-large'] .bottom-nav__item { font-size: 15px; }
-  .bottom-nav__icon { font-size: 24px; }
-  .medicine-row { grid-template-columns: 86px minmax(0, 1fr); }
-  .reminder-overlay { left: calc(124px + var(--safe-left)); }
-}
-
-/* Landscape layout for the 1920×1200 Samsung and Lenovo tablets. */
-@media (min-width: 1180px) and (min-height: 650px) {
-  .app-frame { padding-left: calc(156px + var(--safe-left)); }
-  .bottom-nav { width: calc(156px + var(--safe-left)); }
-  .bottom-nav__item {
-    flex-direction: row;
-    justify-content: flex-start;
-    padding: 0 14px;
-    font-size: 15px;
-  }
-  .dashboard-grid {
-    grid-template-areas: "schedule reminder";
-    grid-template-columns: minmax(0, 1.25fr) minmax(390px, 0.85fr);
-    align-items: start;
-    gap: 24px;
-  }
-  .dashboard-reminder { position: sticky; top: calc(24px + var(--safe-top)); }
-  .reminder-actions { grid-template-columns: 1fr; }
-  .app-page { padding-left: 40px; padding-right: calc(40px + var(--safe-right)); }
-  .reminder-overlay { left: calc(156px + var(--safe-left)); }
 }

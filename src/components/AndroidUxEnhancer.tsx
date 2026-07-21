@@ -36,6 +36,14 @@ export function AndroidUxEnhancer() {
   const [minute, setMinute] = useState(0)
   const currentTime = useMemo(() => `${two(hour)}:${two(minute)}`, [hour, minute])
 
+  useEffect(() => {
+    const root = document.documentElement
+    root.dataset.globalBack = pathname === '/' ? 'false' : 'true'
+    return () => {
+      delete root.dataset.globalBack
+    }
+  }, [pathname])
+
   const openTimePicker = (input: HTMLInputElement) => {
     const parsed = parseTime(input.value)
     setHour(parsed.hour)
@@ -137,7 +145,7 @@ export function AndroidUxEnhancer() {
         <div className="custom-time-overlay" role="dialog" aria-modal="true" aria-labelledby="custom-time-title">
           <div className="custom-time-panel">
             <h2 id="custom-time-title">Выберите время</h2>
-            <p className="muted">Без синего системного окна Android</p>
+            <p className="muted">Спокойный выбор времени внутри приложения</p>
 
             <div className="custom-time-display" aria-live="polite">{currentTime}</div>
 

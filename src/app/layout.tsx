@@ -3,9 +3,11 @@ import '@/styles/globals.css'
 import '@/styles/realme-fixes.css'
 import '@/styles/reminders.css'
 import '@/styles/soft-contrast.css'
+import '@/styles/brand-autocomplete.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { DiagnosticsProvider } from '@/components/DiagnosticsProvider'
 import { BottomNav } from '@/components/BottomNav'
+import { BrandMark } from '@/components/BrandMark'
 
 export const metadata: Metadata = {
   title: 'Мои таблетки',
@@ -31,6 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <div className="app-frame">
               <main>{children}</main>
+              <footer className="app-brand-footer" aria-label="Автор приложения">
+                <BrandMark />
+              </footer>
               <BottomNav />
             </div>
           </ThemeProvider>

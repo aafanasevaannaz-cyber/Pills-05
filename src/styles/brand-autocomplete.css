@@ -1,83 +1,96 @@
 .brand-mark {
-  width: min(100%, 560px);
-  margin: 26px auto 8px;
+  width: 108px;
+  margin: 14px auto 2px;
   display: grid;
   justify-items: center;
-  gap: 2px;
   color: var(--text-muted);
-  opacity: 0.78;
+  opacity: 0.12;
   pointer-events: none;
   user-select: none;
 }
 
 .brand-mark--compact {
-  width: min(86%, 390px);
-  margin: 0 auto 4px;
-  opacity: 0.9;
+  width: 138px;
+  margin: 0 auto 2px;
+  opacity: 0.17;
 }
 
 .brand-mark__image {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 104px;
+  max-height: 38px;
   object-fit: contain;
 }
 
 .brand-mark--compact .brand-mark__image {
-  max-height: 78px;
+  max-height: 46px;
 }
 
 .brand-mark__caption {
-  margin-top: -8px;
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  display: none;
 }
 
 .app-brand-footer {
-  padding: 0 18px calc(12px + var(--safe-bottom));
+  padding: 0 18px calc(7px + var(--safe-bottom));
 }
 
 .medicine-autocomplete {
   position: relative;
-  z-index: 12;
+  z-index: 2;
+}
+
+.medicine-autocomplete__input {
+  background: var(--surface-soft);
+}
+
+.medicine-autocomplete__help {
+  margin-bottom: 0;
 }
 
 .medicine-autocomplete__complete {
   width: 100%;
-  min-height: 54px;
-  margin-top: -8px;
+  min-height: 60px;
+  margin-top: 8px;
   border: 2px solid var(--primary);
   border-radius: 15px;
   background: var(--success-soft);
   color: var(--text);
-  padding: 10px 14px;
+  padding: 11px 14px;
   text-align: left;
   font-weight: 760;
   cursor: pointer;
+  box-shadow: none;
+}
+
+.medicine-autocomplete__complete span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 650;
 }
 
 .medicine-autocomplete__complete strong {
   display: block;
   margin-top: 2px;
-  font-size: 1.08rem;
+  font-size: 1.12rem;
   overflow-wrap: anywhere;
 }
 
 .medicine-suggestions {
+  position: static;
   display: grid;
   gap: 8px;
   margin-top: 8px;
-  padding: 10px;
-  border: 2px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+  box-shadow: none;
 }
 
 .medicine-suggestions__title {
-  margin: 0 2px 2px;
+  margin: 0 3px 2px;
   color: var(--text-muted);
   font-size: 0.86rem;
   font-weight: 750;
@@ -86,9 +99,9 @@
 .medicine-suggestion {
   width: 100%;
   min-height: 50px;
-  border: 2px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: 13px;
-  background: var(--surface-soft);
+  background: var(--surface);
   color: var(--text);
   padding: 10px 13px;
   text-align: left;
@@ -102,21 +115,17 @@
   transform: scale(0.99);
 }
 
-/* До первой настройки это действие именно настраивает звук, а не «проверяет» его. */
-.quick-actions a[href='/sound'] {
-  position: relative;
-  color: transparent;
-  font-size: 0;
-}
-
-.quick-actions a[href='/sound']::after {
-  content: 'Настроить звук';
-  color: var(--text);
-  font-size: 1rem;
-  line-height: 1.18;
-}
-
 [data-theme='dark'] .brand-mark__image,
 [data-theme='high-contrast'] .brand-mark__image {
-  filter: brightness(1.18) saturate(0.8);
+  filter: brightness(1.05) saturate(0.72);
+}
+
+@media (min-width: 720px) and (min-height: 600px) {
+  .brand-mark { width: 126px; }
+  .brand-mark--compact { width: 154px; }
+  .app-brand-footer { padding-left: calc(124px + var(--safe-left)); }
+}
+
+@media (min-width: 1180px) and (min-height: 650px) {
+  .app-brand-footer { padding-left: calc(156px + var(--safe-left)); }
 }

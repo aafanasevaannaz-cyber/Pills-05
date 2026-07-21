@@ -38,7 +38,7 @@ export const PermissionsScreen: React.FC<PermissionsScreenProps> = ({ onComplete
     <div className="reminder-overlay" role="dialog" aria-modal="true" aria-labelledby="permission-title">
       <Card className="reminder-overlay__panel">
         <div className="page-stack center">
-          <BrandMark compact caption="Подарок с заботой" />
+          <BrandMark compact />
           <div className="reminder-bell" aria-hidden="true">🔔</div>
           <div>
             <h2 className="section-title" id="permission-title">Разрешить напоминания?</h2>

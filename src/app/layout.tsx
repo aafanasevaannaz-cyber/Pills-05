@@ -20,8 +20,8 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f4f1ea' },
-    { media: '(prefers-color-scheme: dark)', color: '#141816' },
+    { media: '(prefers-color-scheme: light)', color: '#d9d2c7' },
+    { media: '(prefers-color-scheme: dark)', color: '#151714' },
   ],
 }
 
@@ -33,8 +33,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <div className="app-frame">
               <main>{children}</main>
-              <footer className="app-brand-footer" aria-label="Автор приложения">
-                <BrandMark />
+              <footer className="app-brand-footer" aria-label="Автор приложения Chaipodusham">
+                <BrandMark compact />
               </footer>
               <BottomNav />
             </div>

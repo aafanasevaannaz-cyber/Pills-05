@@ -1,0 +1,202 @@
+.global-back-button {
+  position: fixed;
+  z-index: 95;
+  top: calc(10px + var(--safe-top));
+  left: calc(12px + var(--safe-left));
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  padding: 9px 16px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font: inherit;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
+}
+
+html[data-global-back='true'] .app-page {
+  padding-top: calc(78px + var(--safe-top));
+}
+
+.custom-time-overlay {
+  position: fixed;
+  z-index: 300;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: calc(18px + var(--safe-top)) calc(16px + var(--safe-right)) calc(18px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  background: rgba(12, 14, 12, 0.68);
+}
+
+.custom-time-panel {
+  width: min(100%, 430px);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 22px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.custom-time-panel h2 {
+  margin: 0 0 4px;
+  font-size: 1.45rem;
+}
+
+.custom-time-panel > p {
+  margin: 0;
+}
+
+.custom-time-display {
+  margin: 22px 0;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 18px;
+  background: var(--surface-soft);
+  text-align: center;
+  font-size: clamp(2.8rem, 16vw, 4.8rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.custom-time-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.custom-time-column {
+  display: grid;
+  gap: 9px;
+}
+
+.custom-time-label {
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 750;
+}
+
+.custom-time-column button {
+  min-height: 54px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+}
+
+.custom-time-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* Кнопки шага остаются доступны без прокрутки до самого низа. */
+.progress-track + .ui-card .form-actions {
+  position: sticky;
+  z-index: 24;
+  bottom: calc(var(--bottom-nav-space) - 18px + var(--safe-bottom));
+  margin: 16px -8px -8px;
+  padding: 10px 8px;
+  border-top: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+/* Дополнительные медицинские параметры выглядят как спокойные секции, а не как карточки в карточках. */
+.optional-card {
+  border: 1px solid var(--border) !important;
+  border-radius: 18px !important;
+  background: var(--surface-soft) !important;
+  box-shadow: none !important;
+  padding: 13px !important;
+}
+
+.optional-card .choice {
+  border-width: 1px;
+  background: transparent;
+}
+
+.optional-card .compact-grid {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.optional-card .ui-field {
+  margin-bottom: 10px;
+}
+
+.settings-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  position: sticky;
+  z-index: 25;
+  top: calc(68px + var(--safe-top));
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-bg) 93%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.settings-tab {
+  min-height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-weight: 780;
+}
+
+.settings-tab.is-active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 720px) and (min-height: 600px) {
+  .global-back-button {
+    left: calc(140px + var(--safe-left));
+  }
+
+  html[data-global-back='true'] .app-page {
+    padding-top: calc(84px + var(--safe-top));
+  }
+
+  .progress-track + .ui-card .form-actions {
+    bottom: 12px;
+  }
+
+  .optional-card .compact-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .settings-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  .custom-time-panel {
+    padding: 16px;
+  }
+
+  .custom-time-actions {
+    grid-template-columns: 1fr;
+  }
+}

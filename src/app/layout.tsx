@@ -4,10 +4,12 @@ import '@/styles/realme-fixes.css'
 import '@/styles/reminders.css'
 import '@/styles/soft-contrast.css'
 import '@/styles/brand-autocomplete.css'
+import '@/styles/qa-ux.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { DiagnosticsProvider } from '@/components/DiagnosticsProvider'
 import { BottomNav } from '@/components/BottomNav'
 import { BrandMark } from '@/components/BrandMark'
+import { AndroidUxEnhancer } from '@/components/AndroidUxEnhancer'
 
 export const metadata: Metadata = {
   title: 'Мои таблетки',
@@ -37,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <BrandMark compact />
               </footer>
               <BottomNav />
+              <AndroidUxEnhancer />
             </div>
           </ThemeProvider>
         </DiagnosticsProvider>

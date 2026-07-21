@@ -78,7 +78,7 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
         </button>
       )}
 
-      {open && (
+      {suggestions.length > 1 && (
         <div
           id={`${id}-suggestions`}
           className="medicine-suggestions"

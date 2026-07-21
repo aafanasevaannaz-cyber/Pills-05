@@ -120,15 +120,3 @@
 [data-theme='high-contrast'] .brand-mark__image {
   filter: brightness(1.18) saturate(0.8);
 }
-
-@media (min-width: 720px) and (min-height: 600px) {
-  .app-brand-footer {
-    padding-left: calc(124px + var(--safe-left));
-  }
-}
-
-@media (min-width: 1180px) and (min-height: 650px) {
-  .app-brand-footer {
-    padding-left: calc(156px + var(--safe-left));
-  }
-}

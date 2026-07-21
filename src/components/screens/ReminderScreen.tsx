@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Button } from '@/components/ui/Button'
 import { useSettingsStore } from '@/features/settings/store'
 import {
@@ -15,6 +15,21 @@ import {
   type ReminderVolume,
   type VoiceRate,
 } from '@/features/sound/options'
+
+interface ReminderStopPlugin {
+  stopAll(): Promise<{ stopped: boolean }>
+}
+
+const NativeReminderStop = registerPlugin<ReminderStopPlugin>('ReminderStop')
+
+const stopAllReminderAudio = async () => {
+  await stopReminderPreview()
+  if (Capacitor.isNativePlatform()) {
+    await NativeReminderStop.stopAll().catch((error) => {
+      console.error('Background reminder stop failed:', error)
+    })
+  }
+}
 
 interface ReminderScreenProps {
   medicineName: string
@@ -47,14 +62,16 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
     let voiceTimer: number | undefined
     const nativeAndroid = Capacitor.isNativePlatform()
 
-    if (soundEnabled) {
+    // На Android сигнал уже воспроизводит системное уведомление. Не запускаем его
+    // второй раз из окна приложения, иначе получается утомительный двойной писк.
+    if (soundEnabled && !nativeAndroid) {
       void previewReminderSound(reminderSound, reminderVolume).catch((error) => {
         console.error('Reminder sound failed:', error)
       })
     }
 
-    // On Android the exact native alarm speaks once even when the app is closed.
-    // The WebView voice is kept only for the browser so two voices never overlap.
+    // На Android точный нативный будильник произносит фразу один раз даже при
+    // закрытом приложении. Голос WebView нужен только в браузере.
     if (medicineVoiceEnabled && !nativeAndroid) {
       const delay = soundEnabled ? getReminderSoundOption(reminderSound).previewDelayMs : 100
       voiceTimer = window.setTimeout(() => {
@@ -66,7 +83,7 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
 
     return () => {
       if (voiceTimer) window.clearTimeout(voiceTimer)
-      void stopReminderPreview()
+      void stopAllReminderAudio()
     }
   }, [
     dosage,
@@ -78,9 +95,12 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
     soundEnabled,
   ])
 
-  const finish = (action: () => void) => {
-    void stopReminderPreview()
-    action()
+  const finish = async (action: () => void) => {
+    try {
+      await stopAllReminderAudio()
+    } finally {
+      action()
+    }
   }
 
   return (
@@ -94,13 +114,16 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
           <span><strong>Дозировка:</strong> {dosage}</span>
         </div>
         <div className="reminder-actions">
-          <Button variant="primary" className="ui-button--full" onClick={() => finish(onTaken)}>
+          <Button variant="primary" className="ui-button--full" onClick={() => void finish(onTaken)}>
             ✓ Принято
           </Button>
-          <Button variant="secondary" className="ui-button--full" onClick={() => finish(onDelayed)}>
+          <Button variant="secondary" className="ui-button--full" onClick={() => void stopAllReminderAudio()}>
+            ■ Остановить звук
+          </Button>
+          <Button variant="secondary" className="ui-button--full" onClick={() => void finish(onDelayed)}>
             Напомнить через 10 минут
           </Button>
-          <Button variant="danger" className="ui-button--full" onClick={() => finish(onSkipped)}>
+          <Button variant="danger" className="ui-button--full" onClick={() => void finish(onSkipped)}>
             Не принято
           </Button>
         </div>

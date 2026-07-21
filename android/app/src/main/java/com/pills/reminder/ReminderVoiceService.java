@@ -22,28 +22,57 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReminderVoiceService extends Service {
     private static final String TAG = "ReminderVoiceService";
-    private static final String CHANNEL_ID = "medicine-voice-service-v2";
+    private static final String CHANNEL_ID = "medicine-voice-service-v3";
     private static final int FOREGROUND_NOTIFICATION_ID = 719204;
+    private static final AtomicInteger AUDIO_GENERATION = new AtomicInteger(0);
+    private static WeakReference<ReminderVoiceService> activeService = new WeakReference<>(null);
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextToSpeech textToSpeech;
     private MediaPlayer mediaPlayer;
     private AudioManager audioManager;
     private int previousAlarmVolume = -1;
+    private int activeGeneration = 0;
+
+    /**
+     * Немедленно инвалидирует все отложенные запуски голоса, затем останавливает
+     * живую службу. Возвращаемое поколение используется в диагностике.
+     */
+    public static int stopAllActive(Context context) {
+        int generation = AUDIO_GENERATION.incrementAndGet();
+        ReminderVoiceService service = activeService.get();
+        if (service != null) {
+            service.handler.post(() -> service.stopImmediately("external stop", generation));
+        } else {
+            try {
+                context.stopService(new Intent(context, ReminderVoiceService.class));
+            } catch (Exception error) {
+                Log.w(TAG, "Fallback stopService failed", error);
+            }
+        }
+        Log.i(TAG, "Reminder audio cancellation requested, generation=" + generation);
+        return generation;
+    }
 
     @Override
     public void onCreate() {
         super.onCreate();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        activeService = new WeakReference<>(this);
         createServiceChannel();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        final int runGeneration = AUDIO_GENERATION.incrementAndGet();
+        activeGeneration = runGeneration;
+
         String text = intent == null ? "" : intent.getStringExtra("text");
         float rate = intent == null ? 0.72f : intent.getFloatExtra("rate", 0.72f);
         String voiceMode = intent == null ? "android" : intent.getStringExtra("voiceMode");
@@ -68,18 +97,22 @@ public class ReminderVoiceService extends Service {
         int safeDelay = Math.max(0, delayBeforeVoiceMs);
 
         handler.postDelayed(() -> {
+            if (!isGenerationActive(runGeneration)) {
+                Log.i(TAG, "Delayed voice cancelled before start, generation=" + runGeneration);
+                return;
+            }
             if ("off".equals(safeMode)) {
                 Log.i(TAG, "Reminder has no voice, requestCode=" + requestCode);
-                finishReminder(startId);
+                finishReminder(startId, runGeneration);
                 return;
             }
 
             if ("recorded".equals(safeMode) && !safePath.isEmpty()) {
-                playRecordedVoice(safePath, safeVoiceVolume, requestCode, startId);
+                playRecordedVoice(safePath, safeVoiceVolume, requestCode, startId, runGeneration);
                 return;
             }
 
-            speakAndroidVoice(safeText, safeRate, safeVoiceVolume, requestCode, startId);
+            speakAndroidVoice(safeText, safeRate, safeVoiceVolume, requestCode, startId, runGeneration);
         }, safeDelay);
 
         Log.i(
@@ -87,9 +120,14 @@ public class ReminderVoiceService extends Service {
             "Reminder audio service started, requestCode=" + requestCode +
                 ", alarmVolume=" + alarmVolume +
                 ", voiceMode=" + safeMode +
-                ", voiceVolume=" + safeVoiceVolume
+                ", voiceVolume=" + safeVoiceVolume +
+                ", generation=" + runGeneration
         );
         return START_NOT_STICKY;
+    }
+
+    private boolean isGenerationActive(int generation) {
+        return generation == activeGeneration && generation == AUDIO_GENERATION.get();
     }
 
     private void applyAlarmVolume(float requestedLevel) {
@@ -127,12 +165,14 @@ public class ReminderVoiceService extends Service {
         String path,
         float volume,
         int requestCode,
-        int startId
+        int startId,
+        int generation
     ) {
+        if (!isGenerationActive(generation)) return;
         File file = new File(path);
         if (!file.exists() || file.length() == 0) {
             Log.e(TAG, "Recorded reminder voice is missing, requestCode=" + requestCode);
-            finishReminder(startId);
+            finishReminder(startId, generation);
             return;
         }
 
@@ -150,21 +190,26 @@ public class ReminderVoiceService extends Service {
                 Log.i(TAG, "Recorded reminder voice completed, requestCode=" + requestCode);
                 player.release();
                 if (mediaPlayer == player) mediaPlayer = null;
-                finishReminder(startId);
+                finishReminder(startId, generation);
             });
             mediaPlayer.setOnErrorListener((player, what, extra) -> {
                 Log.e(TAG, "Recorded reminder voice failed, what=" + what + ", extra=" + extra);
                 player.release();
                 if (mediaPlayer == player) mediaPlayer = null;
-                finishReminder(startId);
+                finishReminder(startId, generation);
                 return true;
             });
             mediaPlayer.prepare();
+            if (!isGenerationActive(generation)) {
+                mediaPlayer.release();
+                mediaPlayer = null;
+                return;
+            }
             mediaPlayer.start();
             Log.i(TAG, "Recorded reminder voice started, requestCode=" + requestCode + ", volume=" + volume);
         } catch (Exception error) {
             Log.e(TAG, "Could not play recorded reminder voice", error);
-            finishReminder(startId);
+            finishReminder(startId, generation);
         }
     }
 
@@ -173,18 +218,24 @@ public class ReminderVoiceService extends Service {
         float rate,
         float volume,
         int requestCode,
-        int startId
+        int startId,
+        int generation
     ) {
-        if (text == null || text.trim().isEmpty()) {
-            finishReminder(startId);
+        if (!isGenerationActive(generation) || text == null || text.trim().isEmpty()) {
+            finishReminder(startId, generation);
             return;
         }
 
         stopSpeech();
         textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
+            if (!isGenerationActive(generation)) {
+                Log.i(TAG, "TTS initialization cancelled, generation=" + generation);
+                stopSpeech();
+                return;
+            }
             if (status != TextToSpeech.SUCCESS || textToSpeech == null) {
                 Log.e(TAG, "Background TTS initialization failed: " + status);
-                finishReminder(startId);
+                finishReminder(startId, generation);
                 return;
             }
 
@@ -192,7 +243,7 @@ public class ReminderVoiceService extends Service {
             if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
                 languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.e(TAG, "Russian background TTS unavailable: " + languageResult);
-                finishReminder(startId);
+                finishReminder(startId, generation);
                 return;
             }
 
@@ -213,22 +264,26 @@ public class ReminderVoiceService extends Service {
                 @Override
                 public void onDone(String utteranceId) {
                     Log.i(TAG, "Background Russian voice completed, requestCode=" + requestCode);
-                    finishReminder(startId);
+                    finishReminder(startId, generation);
                 }
 
                 @Override
                 public void onError(String utteranceId) {
                     Log.e(TAG, "Background Russian voice failed, requestCode=" + requestCode);
-                    finishReminder(startId);
+                    finishReminder(startId, generation);
                 }
 
                 @Override
                 public void onError(String utteranceId, int errorCode) {
                     Log.e(TAG, "Background Russian voice failed, code=" + errorCode);
-                    finishReminder(startId);
+                    finishReminder(startId, generation);
                 }
             });
 
+            if (!isGenerationActive(generation)) {
+                stopSpeech();
+                return;
+            }
             Bundle parameters = new Bundle();
             parameters.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
             textToSpeech.speak(
@@ -240,12 +295,22 @@ public class ReminderVoiceService extends Service {
         });
     }
 
-    private void finishReminder(int startId) {
+    private void finishReminder(int startId, int generation) {
         handler.post(() -> {
+            if (!isGenerationActive(generation)) return;
             stopCurrentAudio(true);
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf(startId);
         });
+    }
+
+    private void stopImmediately(String reason, int generation) {
+        activeGeneration = generation;
+        handler.removeCallbacksAndMessages(null);
+        stopCurrentAudio(true);
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
+        Log.i(TAG, "Reminder audio stopped immediately: " + reason + ", generation=" + generation);
     }
 
     @Nullable
@@ -258,6 +323,9 @@ public class ReminderVoiceService extends Service {
     public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         stopCurrentAudio(true);
+        ReminderVoiceService current = activeService.get();
+        if (current == this) activeService.clear();
+        Log.i(TAG, "Reminder audio service destroyed, generation=" + activeGeneration);
         super.onDestroy();
     }
 

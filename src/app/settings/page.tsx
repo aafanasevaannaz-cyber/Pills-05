@@ -12,13 +12,18 @@ import {
 } from '@/features/settings/store'
 import { getReminderSoundOption } from '@/features/sound/options'
 import { exportBackup, importBackupFile } from '@/lib/backup'
-import { downloadDiagnosticReport } from '@/lib/diagnostics'
+import {
+  downloadDiagnosticReport,
+  runMedicineAutocompleteSelfTest,
+  shareDiagnosticReport,
+} from '@/lib/diagnostics'
 
 export default function SettingsPage() {
   const settings = useSettingsStore()
   const fileInput = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
+  const [autocompleteResult, setAutocompleteResult] = useState<string>('')
 
   const handleExport = async () => {
     setBusy(true)
@@ -39,13 +44,43 @@ export default function SettingsPage() {
     setStatus('')
     try {
       await downloadDiagnosticReport()
-      setStatus('Диагностический отчёт создан. Его можно прислать разработчику.')
+      setStatus('Файл диагностики создан. Пришлите его вместе с описанием, что нажимали перед ошибкой.')
     } catch (error) {
       console.error('Diagnostics export failed:', error)
       setStatus('Не удалось создать диагностический отчёт.')
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleDiagnosticsShare = async () => {
+    setBusy(true)
+    setStatus('')
+    try {
+      const result = await shareDiagnosticReport()
+      setStatus(
+        result === 'shared'
+          ? 'Открыто меню отправки диагностического отчёта.'
+          : result === 'copied'
+            ? 'Диагностический отчёт скопирован. Вставьте его в сообщение.'
+            : 'Отчёт сохранён файлом, потому что отправка недоступна.'
+      )
+    } catch (error) {
+      console.error('Diagnostics sharing failed:', error)
+      setStatus('Не удалось подготовить отчёт для отправки.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleAutocompleteTest = () => {
+    const result = runMedicineAutocompleteSelfTest()
+    const passedCount = result.checks.filter((check) => check.passed).length
+    setAutocompleteResult(
+      result.passed
+        ? `Словарь работает: ${passedCount} из ${result.checks.length} проверок пройдено. Если подсказки не видны, проблема именно в экране или клавиатуре — это будет записано в отчёт.`
+        : `Ошибка словаря: пройдено ${passedCount} из ${result.checks.length}. Сразу отправьте диагностический отчёт.`
+    )
   }
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,12 +132,13 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <h2 className="section-title">Тема</h2>
+          <h2 className="section-title">Оформление</h2>
+          <p className="muted">Во всех вариантах убраны чисто-белые поверхности и резкие кислотные цвета.</p>
           <div className="choice-grid">
             {[
-              { id: 'light', title: 'Светлая', description: 'Тёплый светлый фон и тёмный текст' },
-              { id: 'dark', title: 'Тёмная', description: 'Спокойный тёмный фон без белых пятен' },
-              { id: 'high-contrast', title: 'Контрастная мягкая', description: 'Тёмно-синий фон и кремовый текст без кислотного жёлтого' },
+              { id: 'light', title: 'Приглушённая', description: 'Тёплый серо-бежевый фон без ярко-белых карточек' },
+              { id: 'dark', title: 'Ночная', description: 'Очень спокойный тёмный фон и мягкий текст' },
+              { id: 'high-contrast', title: 'Чёткая', description: 'Выше читаемость, но без белого по чёрному и жёлтых вспышек' },
             ].map((option) => (
               <label className={`choice${settings.theme === option.id ? ' is-selected' : ''}`} key={option.id}>
                 <input
@@ -171,14 +207,23 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <h2 className="section-title">Диагностика без отдельной программы</h2>
+          <h2 className="section-title">Диагностика ошибок</h2>
           <p className="muted">
-            Отчёт содержит версию приложения, модель Android из системной строки, разрешения, число запланированных уведомлений и последние ошибки.
+            Приложение записывает падения и действия вокруг поля названия: длину текста, число найденных вариантов, работу клавиатуры и нажатия. Само название лекарства не сохраняется.
           </p>
-          <p className="diagnostic-note">Названия лекарств, дозировки и голосовые записи в отчёт не попадают.</p>
-          <Button variant="secondary" className="ui-button--full" disabled={busy} onClick={() => void handleDiagnostics()}>
-            Собрать диагностический отчёт
-          </Button>
+          <p className="diagnostic-note">Сначала повторите ошибку, затем сразу откройте этот раздел и отправьте отчёт.</p>
+          <div className="diagnostic-actions">
+            <Button variant="primary" className="ui-button--full" disabled={busy} onClick={() => void handleDiagnosticsShare()}>
+              Отправить журнал ошибки
+            </Button>
+            <Button variant="secondary" className="ui-button--full" disabled={busy} onClick={() => void handleDiagnostics()}>
+              Сохранить журнал файлом
+            </Button>
+            <Button variant="secondary" className="ui-button--full" disabled={busy} onClick={handleAutocompleteTest}>
+              Проверить словарь подсказок
+            </Button>
+          </div>
+          {autocompleteResult && <div className="diagnostic-result" role="status">{autocompleteResult}</div>}
         </Card>
 
         <Card>

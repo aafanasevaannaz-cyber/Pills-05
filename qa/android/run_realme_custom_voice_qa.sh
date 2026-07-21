@@ -2,8 +2,8 @@
 set -u
 
 APK_PATH="${1:-apk/app-debug.apk}"
-PACKAGE="com.moi.tabletki.reminder"
-COMPONENT="com.moi.tabletki.reminder/com.pills.reminder.MainActivity"
+PACKAGE="com.moi.tabletki.reminder.safe"
+COMPONENT="com.moi.tabletki.reminder.safe/com.pills.reminder.MainActivity"
 RESULT_ROOT="qa-results/realme-c55-android12-sound-fix"
 SCREEN_DIR="${RESULT_ROOT}/screenshots"
 XML_DIR="${RESULT_ROOT}/ui-xml"
@@ -160,15 +160,15 @@ for required in \
   "Громкость сигнала" \
   "Голос после сигнала" \
   "Русский голос Android" \
-  "Мой записанный голос" \
+  "Отдельная запись для этого лекарства" \
   "Громкость русского голоса"; do
   contains_text "${XML_DIR}/03-per-medicine-sound.xml" "$required" \
     || fail "На экране лекарства отсутствует «${required}»"
 done
 
-if tap_text_scroll "Мой записанный голос" 10; then
+if tap_text_scroll "Отдельная запись для этого лекарства" 10; then
   capture "04-custom-voice-selected"
-  contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Громкость своей записи" \
+  contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Громкость записи" \
     || fail "У собственной записи нет отдельного ползунка громкости"
   contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Начать запись" \
     || fail "Режим своего голоса не остался выбранным"
@@ -221,7 +221,7 @@ else
 fi
 
 {
-  echo "# realme C55 Android 12 — three-volume and custom voice QA"
+  echo "# realme C55 Android 12 — smart course, three-volume and custom voice QA"
   echo
   echo "- Ошибок сценария: ${FAILURES}"
   echo "- APK установлен и приложение запущено"

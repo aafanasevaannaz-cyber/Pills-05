@@ -4,7 +4,7 @@ set -u
 APK_PATH="${1:-apk/app-debug.apk}"
 PACKAGE="com.moi.tabletki.reminder.safe"
 COMPONENT="com.moi.tabletki.reminder.safe/com.pills.reminder.MainActivity"
-RESULT_ROOT="qa-results/realme-c55-android12-sound-fix"
+RESULT_ROOT="qa-results/full-android-ux-qa"
 SCREEN_DIR="${RESULT_ROOT}/screenshots"
 XML_DIR="${RESULT_ROOT}/ui-xml"
 LOG_DIR="${RESULT_ROOT}/logs"
@@ -23,9 +23,7 @@ dump_current() {
   for attempt in 1 2 3 4; do
     adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
     adb pull /sdcard/window.xml "$output" >/dev/null 2>&1 || true
-    if [[ -s "$output" ]] && grep -F '<hierarchy' "$output" >/dev/null 2>&1; then
-      return 0
-    fi
+    if [[ -s "$output" ]] && grep -F '<hierarchy' "$output" >/dev/null 2>&1; then return 0; fi
     sleep 1
   done
   return 1
@@ -72,9 +70,16 @@ tap_text_scroll() {
   return 1
 }
 
-contains_text() {
-  local xml="$1" text="$2"
-  grep -F "$text" "$xml" >/dev/null 2>&1
+contains_text() { grep -F "$2" "$1" >/dev/null 2>&1; }
+
+assert_text() {
+  local xml="$1" text="$2" message="$3"
+  contains_text "$xml" "$text" || fail "$message"
+}
+
+assert_not_text() {
+  local xml="$1" text="$2" message="$3"
+  contains_text "$xml" "$text" && fail "$message"
 }
 
 tap_first_edit() {
@@ -85,17 +90,17 @@ tap_first_edit() {
     if [[ -n "$coords" ]]; then
       read -r x y <<<"$coords"
       adb shell input tap "$x" "$y"
-      log_action "Нажато поле ввода (${x},${y})"
+      log_action "Нажато первое поле ввода (${x},${y})"
       sleep 1
       return 0
     fi
     sleep 1
   done
-  fail "Не найдено поле названия"
+  fail "Не найдено поле ввода"
   return 1
 }
 
-log_action "Начало focused QA realme C55: Android 12, 1080x2400, density 400"
+log_action "Начало полного QA: realme C55, Android 12, 1080x2400"
 adb wait-for-device
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
@@ -121,120 +126,146 @@ adb shell pm clear "$PACKAGE" >/dev/null 2>&1 || true
 adb shell cmd appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true
 adb shell cmd appops set "$PACKAGE" USE_EXACT_ALARM allow >/dev/null 2>&1 || true
 adb logcat -c
-
-printf '%s\n' "$COMPONENT" > "${RESULT_ROOT}/resolved-activity.txt"
 adb shell am start -W -n "$COMPONENT" > "${LOG_DIR}/launch.txt" 2>&1 || fail "Приложение не запустилось"
 sleep 5
-capture "00-home-empty"
-
 if tap_text "Разрешить уведомления" 3; then sleep 2; fi
-capture "01-home-ready"
-contains_text "${XML_DIR}/01-home-ready.xml" "Лекарств пока нет" \
-  || fail "Пустой главный экран отображается неправильно"
+capture "00-home-phone"
+assert_text "${XML_DIR}/00-home-phone.xml" "Лекарств пока нет" "Пустой главный экран отображается неправильно"
 
-if ! tap_text "Добавить первое лекарство" 4; then
-  if ! tap_text "+ Добавить" 4; then
-    log_action "Текстовая навигация не сработала — резервное нажатие по верхней кнопке"
-    adb shell input tap 860 175
-    sleep 2
-  fi
-fi
-capture "02-add-name"
-contains_text "${XML_DIR}/02-add-name.xml" "Шаг 1 из 5" \
-  || fail "Экран добавления лекарства не открылся"
+# Полный путь добавления лекарства.
+if ! tap_text "Добавить первое лекарство" 4; then tap_text "+ Добавить" 4 || fail "Не открывается добавление лекарства"; fi
+capture "01-add-name"
+assert_text "${XML_DIR}/01-add-name.xml" "Шаг 1 из 5" "Экран добавления не открылся"
+assert_text "${XML_DIR}/01-add-name.xml" "Назад" "Сверху нет постоянно доступной кнопки назад"
 
 if tap_first_edit; then
   adb shell input text "TestMed"
   adb shell input keyevent 4
   sleep 1
 fi
-tap_text_scroll "Продолжить" 5 || true
-tap_text_scroll "Каждый день" 5 || true
-tap_text_scroll "Продолжить" 6 || true
-tap_text_scroll "08:00" 5 || true
-tap_text_scroll "Продолжить" 8 || true
-capture "03-per-medicine-sound"
+tap_text_scroll "Продолжить" 4 || true
+tap_text "Каждый день" 4 || fail "Не выбирается ежедневный приём"
+tap_text "Продолжить" 4 || fail "Не открывается выбор времени"
 
-for required in \
-  "Как должно звучать напоминание" \
-  "Громкость сигнала" \
-  "Голос после сигнала" \
-  "Русский голос Android" \
-  "Отдельная запись для этого лекарства" \
-  "Громкость русского голоса"; do
-  contains_text "${XML_DIR}/03-per-medicine-sound.xml" "$required" \
-    || fail "На экране лекарства отсутствует «${required}»"
+# Проверяем собственный выбор времени вместо синего системного диалога.
+tap_text "Своё время" 4 || fail "Нет выбора своего времени"
+if tap_first_edit; then sleep 1; fi
+capture "02-custom-time-picker"
+assert_text "${XML_DIR}/02-custom-time-picker.xml" "Выберите время" "Не открылся собственный выбор времени"
+assert_text "${XML_DIR}/02-custom-time-picker.xml" "+ час" "Нет управления часами"
+assert_text "${XML_DIR}/02-custom-time-picker.xml" "+ 5 минут" "Нет управления минутами"
+if grep -F "android.widget.TimePicker" "${XML_DIR}/02-custom-time-picker.xml" >/dev/null 2>&1; then
+  fail "Открылся синий системный TimePicker Android"
+fi
+tap_text "+ час" 3 || true
+tap_text "+ 5 минут" 3 || true
+tap_text "Выбрать" 3 || fail "Не подтверждается собственное время"
+tap_text "Продолжить" 5 || fail "После выбора времени не открывается звук"
+
+# Шесть реально разных сигналов и предпросмотр выбранного ресурса.
+capture "03-six-sounds"
+for sound_name in \
+  "Мягкий звонок" \
+  "Стеклянные колокольчики" \
+  "Деревянный стук" \
+  "Мягкий импульс" \
+  "Чёткий сигнал" \
+  "Громкий будильник"; do
+  assert_text "${XML_DIR}/03-six-sounds.xml" "$sound_name" "На экране отсутствует сигнал «${sound_name}»"
 done
 
-if tap_text_scroll "Отдельная запись для этого лекарства" 10; then
-  capture "04-custom-voice-selected"
-  contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Громкость записи" \
-    || fail "У собственной записи нет отдельного ползунка громкости"
-  contains_text "${XML_DIR}/04-custom-voice-selected.xml" "Начать запись" \
-    || fail "Режим своего голоса не остался выбранным"
-fi
+adb logcat -c
+tap_text_scroll "Деревянный стук" 8 || true
+sleep 2
+adb logcat -d > "${LOG_DIR}/wood-preview.txt" 2>&1 || true
+grep -F "Native alarm sound started: medicine_wood_" "${LOG_DIR}/wood-preview.txt" >/dev/null \
+  || fail "Деревянный сигнал не запускает отдельный звуковой файл"
 
-grep -F 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml >/dev/null \
-  || fail "В APK не объявлено разрешение микрофона"
-grep -F 'startVoiceRecording' android/app/src/main/java/com/pills/reminder/ReminderAudioPlugin.java >/dev/null \
-  || fail "Нативный MediaRecorder не подключён"
-grep -F 'playRecordedVoice' android/app/src/main/java/com/pills/reminder/ReminderAudioPlugin.java >/dev/null \
-  || fail "Нативное воспроизведение своей записи не подключено"
-grep -F 'customVoiceVolume' src/components/screens/AddMedicineScreen.tsx >/dev/null \
-  || fail "Отдельная громкость собственной записи не сохраняется"
-grep -F 'voiceVolume' src/features/reminders/nativeNotifications.logic.ts >/dev/null \
-  || fail "Громкость выбранного голоса не передаётся в фоновое напоминание"
-grep -F 'setStreamVolume(AudioManager.STREAM_ALARM' android/app/src/main/java/com/pills/reminder/ReminderVoiceService.java >/dev/null \
-  || fail "Фоновое напоминание не управляет громкостью будильника"
-
-tap_text_scroll "Русский голос Android" 10 || true
+# Главная регрессия: остановка до запуска отложенного голоса.
+tap_text_scroll "Русский голос Android" 8 || true
 adb logcat -c
 tap_text_scroll "Быстро проверить всё напоминание" 14 || true
-sleep 10
-adb logcat -d > "${LOG_DIR}/preview-logcat.txt" 2>&1 || true
-grep -F "Native alarm sound started: medicine_alarm_maximum" "${LOG_DIR}/preview-logcat.txt" >/dev/null \
-  || fail "Максимальный сигнал не запустился"
-grep -F "Russian alarm-stream voice started" "${LOG_DIR}/preview-logcat.txt" >/dev/null \
-  || fail "Русский голос не запустился"
-grep -F "Alarm stream volume set to" "${LOG_DIR}/preview-logcat.txt" >/dev/null \
-  || fail "Предпросмотр не установил выбранную громкость будильника"
-capture "05-preview-completed"
-
-adb logcat -d > "${LOG_DIR}/full-logcat.txt" 2>&1 || true
-PID="$(adb shell pidof -s "$PACKAGE" 2>/dev/null | tr -d '\r')"
-if [[ -n "$PID" ]]; then
-  adb logcat -d --pid "$PID" > "${LOG_DIR}/application-log.txt" 2>&1 || true
-else
-  grep -F "$PACKAGE" "${LOG_DIR}/full-logcat.txt" > "${LOG_DIR}/application-log.txt" 2>&1 || true
+sleep 1
+tap_text "Остановить звук" 5 || fail "Кнопка остановки недоступна"
+sleep 5
+adb logcat -d > "${LOG_DIR}/stop-preview.txt" 2>&1 || true
+grep -F "Delayed reminder voice cancelled before start" "${LOG_DIR}/stop-preview.txt" >/dev/null \
+  || fail "Отложенный голос не был отменён после остановки"
+if grep -F "Russian alarm-stream voice started" "${LOG_DIR}/stop-preview.txt" >/dev/null; then
+  fail "Русский голос всё равно запустился после остановки"
 fi
-adb logcat -b crash -d > "${LOG_DIR}/crash-buffer.txt" 2>&1 || true
-adb shell dumpsys package "$PACKAGE" > "${LOG_DIR}/package-dumpsys.txt" 2>&1 || true
+capture "04-sound-stopped"
 
+# Последний шаг: дополнительные параметры не должны выглядеть как россыпь карточек.
+tap_text_scroll "Продолжить" 12 || true
+capture "05-dose-optional-collapsed"
+assert_text "${XML_DIR}/05-dose-optional-collapsed.xml" "Следить, сколько лекарства осталось" "Нет необязательного учёта запаса"
+assert_not_text "${XML_DIR}/05-dose-optional-collapsed.xml" "Сколько осталось" "Поля запаса раскрыты без согласия пользователя"
+tap_text_scroll "Следить, сколько лекарства осталось" 8 || true
+capture "06-stock-expanded"
+assert_text "${XML_DIR}/06-stock-expanded.xml" "Сколько осталось" "Учёт запаса не раскрывается"
+assert_text "${XML_DIR}/06-stock-expanded.xml" "За один приём" "Нет расхода за приём"
+
+# Настройки разбиты на вкладки, а не одну длинную простыню.
+tap_text "Настройки" 5 || {
+  adb shell input keyevent 4
+  sleep 1
+  tap_text "Настройки" 5 || fail "Не открываются настройки"
+}
+capture "07-settings-tabs"
+for tab in "Главное" "Вид" "Данные" "Ошибки"; do
+  assert_text "${XML_DIR}/07-settings-tabs.xml" "$tab" "Нет вкладки настроек «${tab}»"
+done
+assert_not_text "${XML_DIR}/07-settings-tabs.xml" "Размер текста" "Все настройки по-прежнему вывалены одной длинной страницей"
+tap_text "Вид" 3 || fail "Не открывается вкладка внешнего вида"
+capture "08-settings-appearance"
+assert_text "${XML_DIR}/08-settings-appearance.xml" "Размер текста" "Во вкладке «Вид» нет размера текста"
+
+# Планшетный размер: интерфейс должен оставаться доступным и без наложений.
+adb shell wm size 1920x1200
+adb shell wm density 240
+adb shell am force-stop "$PACKAGE"
+adb shell am start -W -n "$COMPONENT" > "${LOG_DIR}/tablet-launch.txt" 2>&1 || fail "Приложение не запустилось в планшетном размере"
+sleep 4
+capture "09-tablet-settings"
+assert_text "${XML_DIR}/09-tablet-settings.xml" "Настройки" "Настройки пропали на планшетном размере"
+assert_text "${XML_DIR}/09-tablet-settings.xml" "Назад" "На планшете нет доступной кнопки назад"
+
+# Статические проверки критической логики.
+grep -F "previewGeneration" src/features/sound/nativeAudio.ts >/dev/null \
+  || fail "Предпросмотр не имеет токена отмены"
+grep -F "AUDIO_GENERATION" android/app/src/main/java/com/pills/reminder/ReminderVoiceService.java >/dev/null \
+  || fail "Фоновая служба не защищена от гонки остановки"
+grep -F "stopAllActive" android/app/src/main/java/com/pills/reminder/ReminderStopPlugin.java >/dev/null \
+  || fail "Кнопка остановки не вызывает полное выключение службы"
+for sound_id in chime wood pulse; do
+  [[ -f "android/app/src/main/res/raw/medicine_${sound_id}_maximum.wav" ]] \
+    || fail "При сборке не создан Android-ресурс medicine_${sound_id}_maximum.wav"
+  [[ -f "public/sounds/medicine_${sound_id}_normal.wav" ]] \
+    || fail "При сборке не создан web-ресурс medicine_${sound_id}_normal.wav"
+done
+
+adb shell wm size 1080x2400
+adb shell wm density 400
+adb logcat -d > "${LOG_DIR}/full-logcat.txt" 2>&1 || true
+adb logcat -b crash -d > "${LOG_DIR}/crash-buffer.txt" 2>&1 || true
 if grep -F "Process: ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null \
   || grep -F "ANR in ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null; then
-  grep -Ein -A 50 -B 10 "Process: ${PACKAGE}|ANR in ${PACKAGE}" \
-    "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" \
-    > "${RESULT_ROOT}/crash-message.txt" || true
   fail "Найдено падение или ANR приложения"
-else
-  echo "Падений и ANR процесса ${PACKAGE} не обнаружено." > "${RESULT_ROOT}/crash-message.txt"
 fi
 
 {
-  echo "# realme C55 Android 12 — smart course, three-volume and custom voice QA"
+  echo "# Полный Android QA — realme C55 и планшетный размер"
   echo
   echo "- Ошибок сценария: ${FAILURES}"
-  echo "- APK установлен и приложение запущено"
-  echo "- Ползунок громкости сигнала отображается"
-  echo "- Ползунок громкости русского голоса отображается"
-  echo "- Отдельный ползунок громкости своей записи отображается"
-  echo "- Режим своей записи выбирается и не сбрасывается"
-  echo "- Нативная запись и воспроизведение своей записи присутствуют в Android-сборке"
-  echo "- Максимальный сигнал запускается через поток будильника"
-  echo "- Русский голос запускается через поток будильника"
-  echo "- Падения и ANR проверены"
-  echo "- Эмулятор запущен без аудиоустройства, поэтому физические децибелы и качество микрофона проверяются на реальном realme C55"
+  echo "- Проверен собственный выбор времени без системного синего TimePicker"
+  echo "- Проверены шесть названий сигналов и отдельный ресурс деревянного звука"
+  echo "- Проверена отмена отложенного русского голоса кнопкой остановки"
+  echo "- Проверены свёрнутый и раскрытый учёт запаса"
+  echo "- Проверены четыре короткие вкладки настроек"
+  echo "- Сняты скриншоты телефона и планшетного размера"
+  echo "- Проверены crash buffer и ANR"
 } > "$SUMMARY"
 
-log_action "Focused QA завершён. Ошибок: ${FAILURES}"
+log_action "Полный Android QA завершён. Ошибок: ${FAILURES}"
 exit "$FAILURES"

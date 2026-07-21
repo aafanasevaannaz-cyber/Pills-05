@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import { useAddMedicineUI } from '@/features/medicines/uiStore'
 import {
   previewCustomVoice,
@@ -48,18 +48,25 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
   help,
   disabled = false,
 }) => {
-  const soundChoice = useAddMedicineUI((state) => state.soundChoice)
-  const previousSoundChoice = useRef(soundChoice)
+  const customVoicePath = useAddMedicineUI((state) => state.customVoicePath)
   const selected = getReminderVolumeOption(value)
   const valueIndex = Math.max(0, volumeSteps.indexOf(value))
 
   useEffect(() => {
     if (id !== 'medicine-signal-volume') return
-    if (previousSoundChoice.current === soundChoice) return
-    previousSoundChoice.current = soundChoice
-    const state = useAddMedicineUI.getState()
-    scheduleAudioPreview(() => previewReminderSound(soundChoice, state.volumeChoice))
-  }, [id, soundChoice])
+
+    const previewSelectedSignal = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest('.sound-option') : null
+      if (!target) return
+      window.setTimeout(() => {
+        const state = useAddMedicineUI.getState()
+        scheduleAudioPreview(() => previewReminderSound(state.soundChoice, state.volumeChoice))
+      }, 0)
+    }
+
+    document.addEventListener('click', previewSelectedSignal)
+    return () => document.removeEventListener('click', previewSelectedSignal)
+  }, [id])
 
   const previewValue = (next: ReminderVolume) => {
     const state = useAddMedicineUI.getState()
@@ -79,6 +86,10 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
     }
   }
 
+  const previewHint = id === 'medicine-recorded-voice-volume' && !customVoicePath
+    ? 'После записи двигайте бегунок — голос прозвучит с новой громкостью.'
+    : 'Двигайте бегунок — выбранная громкость прозвучит сразу.'
+
   return (
     <div className="volume-slider">
       <div className="volume-slider__heading">
@@ -86,6 +97,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
         <strong className="volume-slider__value">{selected.title}</strong>
       </div>
       {help && <p className="muted volume-slider__help">{help}</p>}
+      <p className="muted volume-slider__help">{previewHint}</p>
       <input
         id={id}
         className="volume-slider__input"

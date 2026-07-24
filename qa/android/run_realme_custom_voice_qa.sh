@@ -13,6 +13,7 @@ SUMMARY="${RESULT_ROOT}/summary.md"
 FAILURES=0
 START_SECONDS=$SECONDS
 MAX_SECONDS=900
+LAST_XML=""
 mkdir -p "$SCREEN_DIR" "$XML_DIR" "$LOG_DIR"
 : > "$ACTION_LOG"
 
@@ -61,21 +62,42 @@ dump_current() {
 
 capture() {
   local name="$1"
+  local xml_path="${XML_DIR}/${name}.xml"
   check_deadline
   sleep 1
   timeout 10s adb exec-out screencap -p > "${SCREEN_DIR}/${name}.png" || true
-  dump_current "${XML_DIR}/${name}.xml" || true
+  if dump_current "$xml_path"; then
+    LAST_XML="$xml_path"
+  fi
   log_action "Скриншот и XML: ${name}"
 }
 
 coords_for() { timeout 6s python3 qa/android/ui_pick.py "$1" "${@:2}" 2>/dev/null || true; }
 
+tap_from_xml() {
+  local xml="$1" text="$2" index="${3:-0}" coords x y
+  [[ -s "$xml" ]] || return 1
+  coords="$(coords_for "$xml" --text "$text" --index "$index")"
+  [[ -n "$coords" ]] || return 1
+  read -r x y <<<"$coords"
+  adb_quick shell input tap "$x" "$y" >/dev/null 2>&1 || true
+  log_action "Нажато «${text}» по сохранённому XML (${x},${y})"
+  sleep 1
+  return 0
+}
+
 tap_text() {
   local text="$1" attempts="${2:-3}" index="${3:-0}"
   local xml="${RESULT_ROOT}/current.xml" coords x y
+
+  if [[ -n "$LAST_XML" ]] && tap_from_xml "$LAST_XML" "$text" "$index"; then
+    return 0
+  fi
+
   for ((attempt=1; attempt<=attempts; attempt+=1)); do
     check_deadline
     if dump_current "$xml"; then
+      LAST_XML="$xml"
       coords="$(coords_for "$xml" --text "$text" --index "$index")"
       if [[ -n "$coords" ]]; then
         read -r x y <<<"$coords"
@@ -96,6 +118,7 @@ tap_text_scroll() {
     check_deadline
     if tap_text "$text" 2 "$index"; then return 0; fi
     adb_quick shell input swipe 540 1880 540 700 420 >/dev/null 2>&1 || true
+    LAST_XML=""
     log_action "Прокрутка для поиска «${text}», круг ${round}"
     sleep 1
   done
@@ -110,6 +133,7 @@ require_tap() {
     capture "failure-${text//[^[:alnum:]]/-}"
     exit 1
   fi
+  LAST_XML=""
 }
 
 contains_text() { [[ -s "$1" ]] && grep -F "$2" "$1" >/dev/null 2>&1; }
@@ -118,6 +142,16 @@ assert_not_text() { contains_text "$1" "$2" && fail "$3"; }
 
 tap_first_edit() {
   local xml="${RESULT_ROOT}/current.xml" coords x y
+  if [[ -n "$LAST_XML" && -s "$LAST_XML" ]]; then
+    coords="$(coords_for "$LAST_XML" --class-name android.widget.EditText --index 0)"
+    if [[ -n "$coords" ]]; then
+      read -r x y <<<"$coords"
+      adb_quick shell input tap "$x" "$y" >/dev/null 2>&1 || true
+      log_action "Нажато первое поле ввода по сохранённому XML (${x},${y})"
+      sleep 1
+      return 0
+    fi
+  fi
   for attempt in 1 2; do
     check_deadline
     dump_current "$xml" || true
@@ -165,7 +199,7 @@ adb_quick shell cmd appops set "$PACKAGE" USE_EXACT_ALARM allow >/dev/null 2>&1 
 adb_quick logcat -c >/dev/null 2>&1 || true
 adb_medium shell am start -W -n "$COMPONENT" > "${LOG_DIR}/launch.txt" 2>&1 || { fail "Приложение не запустилось"; exit 1; }
 sleep 5
-if tap_text "Разрешить уведомления" 2; then sleep 2; fi
+if tap_text "Разрешить уведомления" 2; then LAST_XML=""; sleep 2; fi
 capture "00-home-phone"
 assert_text "${XML_DIR}/00-home-phone.xml" "Добавить лекарство" "Главное действие добавления лекарства недоступно для Android"
 
@@ -181,11 +215,15 @@ if tap_first_edit; then
   sleep 1
 fi
 require_tap "Продолжить" 3
+capture "01-frequency"
 require_tap "Каждый день" 3
+capture "01-frequency-selected"
 require_tap "Продолжить" 3
+capture "01-time"
 
 phase "Собственный выбор времени"
 require_tap "Своё время" 3
+capture "02-custom-time-field"
 if tap_first_edit; then sleep 1; fi
 capture "02-custom-time-picker"
 assert_text "${XML_DIR}/02-custom-time-picker.xml" "Выберите время" "Не открылся собственный выбор времени"
@@ -195,12 +233,15 @@ if grep -F "android.widget.TimePicker" "${XML_DIR}/02-custom-time-picker.xml" >/
   fail "Открылся синий системный TimePicker Android"
 fi
 require_tap "+ час" 2
+capture "02-time-hour"
 require_tap "+ 5 минут" 2
+capture "02-time-minute"
 require_tap "Выбрать" 2
+capture "02-time-confirmed"
 require_tap "Продолжить" 3
+capture "03-six-sounds"
 
 phase "Шесть сигналов и выбранный звуковой ресурс"
-capture "03-six-sounds"
 for sound_name in \
   "Мягкий звонок" \
   "Стеклянные колокольчики" \
@@ -215,8 +256,7 @@ adb_quick logcat -c >/dev/null 2>&1 || true
 tap_text_scroll "Деревянный стук" 5 || true
 sleep 2
 adb_medium logcat -d > "${LOG_DIR}/wood-preview.txt" 2>&1 || true
-grep -F "Native alarm sound started: medicine_wood_" "${LOG_DIR}/wood-preview.txt" >/dev/null \
-  || fail "Деревянный сигнал не запускает отдельный звуковой файл"
+grep -F "Native alarm sound started: medicine_wood_" "${LOG_DIR}/wood-preview.txt" >/dev/null || fail "Деревянный сигнал не запускает отдельный звуковой файл"
 
 phase "Остановка сигнала до запуска голоса"
 tap_text_scroll "Русский голос Android" 5 || true
@@ -226,8 +266,7 @@ sleep 1
 require_tap "Остановить звук" 3
 sleep 5
 adb_medium logcat -d > "${LOG_DIR}/stop-preview.txt" 2>&1 || true
-grep -F "Delayed reminder voice cancelled before start" "${LOG_DIR}/stop-preview.txt" >/dev/null \
-  || fail "Отложенный голос не был отменён после остановки"
+grep -F "Delayed reminder voice cancelled before start" "${LOG_DIR}/stop-preview.txt" >/dev/null || fail "Отложенный голос не был отменён после остановки"
 if grep -F "Russian alarm-stream voice started" "${LOG_DIR}/stop-preview.txt" >/dev/null; then
   fail "Русский голос всё равно запустился после остановки"
 fi
@@ -246,6 +285,7 @@ assert_text "${XML_DIR}/06-stock-expanded.xml" "За один приём" "Не�
 phase "Короткие вкладки настроек"
 if ! tap_text "Настройки" 3; then
   adb_quick shell input keyevent 4 >/dev/null 2>&1 || true
+  LAST_XML=""
   sleep 1
   require_tap "Настройки" 3
 fi
@@ -281,8 +321,7 @@ adb_quick shell wm size 1080x2400 >/dev/null 2>&1 || true
 adb_quick shell wm density 400 >/dev/null 2>&1 || true
 adb_medium logcat -d > "${LOG_DIR}/full-logcat.txt" 2>&1 || true
 adb_medium logcat -b crash -d > "${LOG_DIR}/crash-buffer.txt" 2>&1 || true
-if grep -F "Process: ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null \
-  || grep -F "ANR in ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null; then
+if grep -F "Process: ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null || grep -F "ANR in ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null; then
   fail "Найдено падение или ANR приложения"
 fi
 

@@ -28,8 +28,42 @@
   font-size: 0.78rem;
 }
 
+/* На телефоне кнопки шага стоят рядом и не перекрывают половину экрана. */
+@media (max-width: 719px) {
+  .progress-track + .ui-card .form-actions {
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    gap: 8px;
+  }
+
+  .progress-track + .ui-card .form-actions .ui-button {
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  /* Частота, время и дозировка показываются компактной сеткой.
+     :has поддерживается современными Android WebView; без него остаётся безопасная одноколоночная раскладка. */
+  .progress-track + .ui-card .choice-grid:has(> button.choice) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .progress-track + .ui-card .choice-grid:has(> button.choice) > .choice {
+    min-height: 88px;
+    padding: 10px;
+  }
+
+  .progress-track + .ui-card .choice-grid:has(> button.choice) .choice__description {
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+}
+
 @media (max-width: 360px) {
   .optional-card > .choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-track + .ui-card .choice-grid:has(> button.choice) {
     grid-template-columns: 1fr;
   }
 }

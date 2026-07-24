@@ -47,7 +47,8 @@ finish_report() {
 trap finish_report EXIT
 
 snapshot() {
-  local name="$1" xml="${XML_DIR}/${name}.xml"
+  local name="$1"
+  local xml="${XML_DIR}/${name}.xml"
   check_deadline
   sleep 1
   timeout 10s adb exec-out screencap -p > "${SCREEN_DIR}/${name}.png" || true
@@ -65,53 +66,74 @@ snapshot() {
 
 coords_for() { timeout 6s python3 qa/android/ui_pick.py "$1" "${@:2}" 2>/dev/null || true; }
 
-tap_from_last() {
-  local text="$1" index="${2:-0}" coords x y
+coords_from_last() {
+  local text="$1"
+  local index="${2:-0}"
   [[ -n "$LAST_XML" && -s "$LAST_XML" ]] || return 1
-  coords="$(coords_for "$LAST_XML" --text "$text" --index "$index")"
+  coords_for "$LAST_XML" --text "$text" --index "$index"
+}
+
+tap_coords() {
+  local coords="$1"
+  local label="$2"
+  local x y
   [[ -n "$coords" ]] || return 1
   read -r x y <<<"$coords"
   adb_quick shell input tap "$x" "$y" >/dev/null 2>&1 || true
-  log_action "Нажато «${text}» (${x},${y})"
-  LAST_XML=""
+  log_action "Нажато «${label}» (${x},${y})"
   sleep 1
-  return 0
+}
+
+tap_from_last() {
+  local text="$1"
+  local coords
+  coords="$(coords_from_last "$text" 0)"
+  [[ -n "$coords" ]] || return 1
+  tap_coords "$coords" "$text"
+  LAST_XML=""
 }
 
 tap_first_edit() {
-  local coords x y
+  local coords
   [[ -n "$LAST_XML" && -s "$LAST_XML" ]] || return 1
   coords="$(coords_for "$LAST_XML" --class-name android.widget.EditText --index 0)"
   [[ -n "$coords" ]] || return 1
-  read -r x y <<<"$coords"
-  adb_quick shell input tap "$x" "$y" >/dev/null 2>&1 || true
-  log_action "Нажато первое поле ввода (${x},${y})"
+  tap_coords "$coords" "первое поле ввода"
   LAST_XML=""
-  sleep 1
-  return 0
 }
 
 require_tap() {
-  local text="$1" failure_name="${2:-tap-failure}"
+  local text="$1"
+  local failure_name="$2"
   if ! tap_from_last "$text"; then
     fail "Не удалось нажать «${text}»"
     snapshot "$failure_name"
     return 1
   fi
-  return 0
 }
 
-scroll_to_text() {
-  local text="$1" prefix="$2" rounds="${3:-5}"
-  local round
-  for ((round=1; round<=rounds; round+=1)); do
+scroll_until_visible() {
+  local text="$1"
+  local prefix="$2"
+  local rounds="${3:-5}"
+  local round coords
+  for ((round=0; round<=rounds; round+=1)); do
     check_deadline
-    if tap_from_last "$text"; then return 0; fi
+    coords="$(coords_from_last "$text" 0)"
+    if [[ -n "$coords" ]]; then return 0; fi
     adb_quick shell input swipe 540 1900 540 720 360 >/dev/null 2>&1 || true
     snapshot "${prefix}-scroll-${round}"
   done
   fail "Не найден элемент «${text}» после прокрутки"
   return 1
+}
+
+scroll_and_tap() {
+  local text="$1"
+  local prefix="$2"
+  local rounds="${3:-5}"
+  scroll_until_visible "$text" "$prefix" "$rounds" || return 1
+  tap_from_last "$text"
 }
 
 contains_text() { [[ -s "$1" ]] && grep -F "$2" "$1" >/dev/null 2>&1; }
@@ -153,17 +175,14 @@ if tap_from_last "Разрешить уведомления"; then sleep 2; fi
 snapshot "00-home-phone"
 assert_text "${XML_DIR}/00-home-phone.xml" "Добавить лекарство" "Главное действие добавления лекарства недоступно"
 
-phase "Добавление лекарства и навигация"
+phase "Добавление лекарства"
 require_tap "Добавить лекарство" "failure-add" || exit 1
 snapshot "01-add-name"
 assert_text "${XML_DIR}/01-add-name.xml" "Шаг 1 из 5" "Экран добавления не открылся"
-# WebView иногда не отдаёт fixed-кнопку в XML, поэтому дополнительно проверяем реализацию и скриншот.
 if ! contains_text "${XML_DIR}/01-add-name.xml" "Назад"; then
-  grep -F "global-back-button" src/components/AndroidUxEnhancer.tsx >/dev/null \
-    || fail "Постоянная кнопка назад отсутствует в коде"
-  log_action "Кнопка назад проверяется по скриншоту: WebView не включил fixed-элемент в XML"
+  grep -F "global-back-button" src/components/AndroidUxEnhancer.tsx >/dev/null || fail "Постоянная кнопка назад отсутствует"
+  log_action "Fixed-кнопка назад проверена по скриншоту и исходному коду"
 fi
-
 if tap_first_edit; then
   adb_quick shell input text "TestMed" >/dev/null 2>&1 || true
   adb_quick shell input keyevent 4 >/dev/null 2>&1 || true
@@ -180,22 +199,16 @@ require_tap "Продолжить" "failure-frequency-continue" || exit 1
 snapshot "01-time"
 
 phase "Собственный выбор времени"
-# Пункт находится ниже первого экрана при крупном тексте: прокрутка обязательна и для теста, и для пользователя.
 adb_quick shell input swipe 540 1920 540 720 380 >/dev/null 2>&1 || true
 snapshot "01-time-scrolled"
-scroll_to_text "Своё время" "time-custom" 3 || exit 1
+scroll_and_tap "Своё время" "time-custom" 3 || exit 1
 snapshot "02-custom-time-field"
-if ! tap_first_edit; then
-  fail "Поле точного времени не найдено"
-  exit 1
-fi
+if ! tap_first_edit; then fail "Поле точного времени не найдено"; exit 1; fi
 snapshot "02-custom-time-picker"
 assert_text "${XML_DIR}/02-custom-time-picker.xml" "Выберите время" "Не открылся собственный выбор времени"
 assert_text "${XML_DIR}/02-custom-time-picker.xml" "+ час" "Нет управления часами"
 assert_text "${XML_DIR}/02-custom-time-picker.xml" "+ 5 минут" "Нет управления минутами"
-if grep -F "android.widget.TimePicker" "${XML_DIR}/02-custom-time-picker.xml" >/dev/null 2>&1; then
-  fail "Открылся синий системный TimePicker Android"
-fi
+if grep -F "android.widget.TimePicker" "${XML_DIR}/02-custom-time-picker.xml" >/dev/null 2>&1; then fail "Открылся системный синий TimePicker"; fi
 require_tap "+ час" "failure-hour" || exit 1
 snapshot "02-time-hour"
 require_tap "+ 5 минут" "failure-minute" || exit 1
@@ -205,110 +218,92 @@ snapshot "02-time-confirmed"
 require_tap "Продолжить" "failure-time-continue" || exit 1
 snapshot "03-six-sounds"
 
-phase "Шесть сигналов и отдельные ресурсы"
-for sound_name in \
-  "Мягкий звонок" \
-  "Стеклянные колокольчики" \
-  "Деревянный стук" \
-  "Мягкий импульс" \
-  "Чёткий сигнал" \
-  "Громкий будильник"; do
-  assert_text "${XML_DIR}/03-six-sounds.xml" "$sound_name" "На экране отсутствует сигнал «${sound_name}»"
+phase "Шесть сигналов"
+for sound_name in "Мягкий звонок" "Стеклянные колокольчики" "Деревянный стук" "Мягкий импульс" "Чёткий сигнал" "Громкий будильник"; do
+  assert_text "${XML_DIR}/03-six-sounds.xml" "$sound_name" "Отсутствует сигнал «${sound_name}»"
 done
-
 adb_quick logcat -c >/dev/null 2>&1 || true
-scroll_to_text "Деревянный стук" "sound-wood" 4 || true
+scroll_and_tap "Деревянный стук" "sound-wood" 4 || true
 sleep 2
 adb_medium logcat -d > "${LOG_DIR}/wood-preview.txt" 2>&1 || true
-grep -F "Native alarm sound started: medicine_wood_" "${LOG_DIR}/wood-preview.txt" >/dev/null \
-  || fail "Деревянный сигнал не запускает отдельный звуковой файл"
+grep -F "Native alarm sound started: medicine_wood_" "${LOG_DIR}/wood-preview.txt" >/dev/null || fail "Деревянный сигнал не запускает отдельный файл"
 snapshot "03-after-wood"
 
-phase "Остановка сигнала до запуска голоса"
-scroll_to_text "Русский голос Android" "voice-android" 5 || true
+phase "Остановка звука"
+scroll_and_tap "Русский голос Android" "voice-android" 5 || true
 snapshot "03-voice-selected"
+scroll_until_visible "Быстро проверить всё напоминание" "preview-full" 8 || true
+preview_coords="$(coords_from_last "Быстро проверить всё напоминание" 0)"
+stop_coords="$(coords_from_last "Остановить звук" 0)"
 adb_quick logcat -c >/dev/null 2>&1 || true
-scroll_to_text "Быстро проверить всё напоминание" "preview-full" 8 || true
-sleep 1
-snapshot "03-preview-running"
-scroll_to_text "Остановить звук" "stop-audio" 3 || true
+if [[ -n "$preview_coords" && -n "$stop_coords" ]]; then
+  tap_coords "$preview_coords" "Быстро проверить всё напоминание"
+  sleep 1
+  tap_coords "$stop_coords" "Остановить звук"
+  LAST_XML=""
+else
+  fail "Кнопки проверки и остановки не оказались доступны одновременно"
+fi
 sleep 5
 adb_medium logcat -d > "${LOG_DIR}/stop-preview.txt" 2>&1 || true
-grep -F "Delayed reminder voice cancelled before start" "${LOG_DIR}/stop-preview.txt" >/dev/null \
-  || fail "Отложенный голос не был отменён после остановки"
-if grep -F "Russian alarm-stream voice started" "${LOG_DIR}/stop-preview.txt" >/dev/null; then
-  fail "Русский голос всё равно запустился после остановки"
-fi
+grep -F "Delayed reminder voice cancelled before start" "${LOG_DIR}/stop-preview.txt" >/dev/null || fail "Отложенный голос не отменён"
+if grep -F "Russian alarm-stream voice started" "${LOG_DIR}/stop-preview.txt" >/dev/null; then fail "Голос запустился после остановки"; fi
 snapshot "04-sound-stopped"
 
-phase "Дозировка и учёт запаса"
-scroll_to_text "Продолжить" "sound-continue" 5 || true
+phase "Дозировка и запас"
+scroll_and_tap "Продолжить" "sound-continue" 5 || true
 snapshot "05-dose-optional-collapsed"
 assert_text "${XML_DIR}/05-dose-optional-collapsed.xml" "Следить, сколько лекарства осталось" "Нет необязательного учёта запаса"
-assert_not_text "${XML_DIR}/05-dose-optional-collapsed.xml" "Сколько осталось" "Поля запаса раскрыты без согласия пользователя"
-scroll_to_text "Следить, сколько лекарства осталось" "stock-toggle" 5 || true
+assert_not_text "${XML_DIR}/05-dose-optional-collapsed.xml" "Сколько осталось" "Поля запаса раскрыты без согласия"
+scroll_and_tap "Следить, сколько лекарства осталось" "stock-toggle" 5 || true
 snapshot "06-stock-expanded"
 assert_text "${XML_DIR}/06-stock-expanded.xml" "Сколько осталось" "Учёт запаса не раскрывается"
 assert_text "${XML_DIR}/06-stock-expanded.xml" "За один приём" "Нет расхода за приём"
 
-phase "Короткие вкладки настроек"
-# Нижняя навигация фиксирована; возвращаемся наверх, чтобы XML дал ей реальные координаты.
-adb_quick shell input keyevent 4 >/dev/null 2>&1 || true
-sleep 1
+phase "Настройки"
 snapshot "07-before-settings"
 if ! tap_from_last "Настройки"; then
   adb_quick shell input tap 930 2170 >/dev/null 2>&1 || true
-  log_action "Настройки открыты резервным нажатием по фиксированной нижней навигации"
+  log_action "Настройки открыты резервным нажатием по нижней навигации"
   sleep 2
 fi
 snapshot "07-settings-tabs"
-for tab in "Главное" "Вид" "Данные" "Ошибки"; do
-  assert_text "${XML_DIR}/07-settings-tabs.xml" "$tab" "Нет вкладки настроек «${tab}»"
-done
-assert_not_text "${XML_DIR}/07-settings-tabs.xml" "Размер текста" "Все настройки по-прежнему вывалены одной длинной страницей"
+for tab in "Главное" "Вид" "Данные" "Ошибки"; do assert_text "${XML_DIR}/07-settings-tabs.xml" "$tab" "Нет вкладки «${tab}»"; done
+assert_not_text "${XML_DIR}/07-settings-tabs.xml" "Размер текста" "Настройки остались одной длинной страницей"
 require_tap "Вид" "failure-settings-view" || true
 snapshot "08-settings-appearance"
-assert_text "${XML_DIR}/08-settings-appearance.xml" "Размер текста" "Во вкладке «Вид» нет размера текста"
+assert_text "${XML_DIR}/08-settings-appearance.xml" "Размер текста" "Во вкладке Вид нет размера текста"
 
-phase "Планшетный размер"
+phase "Планшет"
 adb_quick shell wm size 1920x1200 >/dev/null 2>&1 || true
 adb_quick shell wm density 240 >/dev/null 2>&1 || true
 adb_quick shell am force-stop "$PACKAGE" >/dev/null 2>&1 || true
-adb_medium shell am start -W -n "$COMPONENT" > "${LOG_DIR}/tablet-launch.txt" 2>&1 || fail "Приложение не запустилось в планшетном размере"
+adb_medium shell am start -W -n "$COMPONENT" > "${LOG_DIR}/tablet-launch.txt" 2>&1 || fail "Не запустилось на планшетном размере"
 sleep 4
 snapshot "09-tablet-settings"
-assert_text "${XML_DIR}/09-tablet-settings.xml" "Настройки" "Настройки пропали на планшетном размере"
+assert_text "${XML_DIR}/09-tablet-settings.xml" "Настройки" "Настройки пропали на планшете"
 
-phase "Статические проверки и crash buffer"
-grep -F "previewGeneration" src/features/sound/nativeAudio.ts >/dev/null || fail "Предпросмотр не имеет токена отмены"
-grep -F "AUDIO_GENERATION" android/app/src/main/java/com/pills/reminder/ReminderVoiceService.java >/dev/null || fail "Фоновая служба не защищена от гонки остановки"
-grep -F "stopAllActive" android/app/src/main/java/com/pills/reminder/ReminderStopPlugin.java >/dev/null || fail "Кнопка остановки не вызывает полное выключение службы"
+phase "Crash и статические проверки"
+grep -F "previewGeneration" src/features/sound/nativeAudio.ts >/dev/null || fail "Нет токена отмены предпросмотра"
+grep -F "AUDIO_GENERATION" android/app/src/main/java/com/pills/reminder/ReminderVoiceService.java >/dev/null || fail "Служба не защищена от гонки"
+grep -F "stopAllActive" android/app/src/main/java/com/pills/reminder/ReminderStopPlugin.java >/dev/null || fail "Нет полного выключения службы"
 for sound_id in chime wood pulse; do
-  [[ -f "android/app/src/main/res/raw/medicine_${sound_id}_maximum.wav" ]] || fail "Не создан Android-ресурс medicine_${sound_id}_maximum.wav"
-  [[ -f "public/sounds/medicine_${sound_id}_normal.wav" ]] || fail "Не создан web-ресурс medicine_${sound_id}_normal.wav"
+  [[ -f "android/app/src/main/res/raw/medicine_${sound_id}_maximum.wav" ]] || fail "Нет Android-ресурса ${sound_id}"
+  [[ -f "public/sounds/medicine_${sound_id}_normal.wav" ]] || fail "Нет web-ресурса ${sound_id}"
 done
-
 adb_quick shell wm size 1080x2400 >/dev/null 2>&1 || true
 adb_quick shell wm density 400 >/dev/null 2>&1 || true
 adb_medium logcat -d > "${LOG_DIR}/full-logcat.txt" 2>&1 || true
 adb_medium logcat -b crash -d > "${LOG_DIR}/crash-buffer.txt" 2>&1 || true
-if grep -F "Process: ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null \
-  || grep -F "ANR in ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null; then
-  fail "Найдено падение или ANR приложения"
-fi
+if grep -F "Process: ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null || grep -F "ANR in ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null; then fail "Найдено падение или ANR"; fi
 
 {
   echo "# Полный Android QA — realme C55 и планшетный размер"
   echo
   echo "- Ошибок сценария: ${FAILURES}"
-  echo "- Проверен собственный выбор времени без системного синего TimePicker"
-  echo "- Проверены шесть названий сигналов и отдельный ресурс деревянного звука"
-  echo "- Проверена отмена отложенного русского голоса кнопкой остановки"
-  echo "- Проверены свёрнутый и раскрытый учёт запаса"
-  echo "- Проверены четыре короткие вкладки настроек"
-  echo "- Сняты скриншоты телефона и планшетного размера"
-  echo "- Проверены crash buffer и ANR"
+  echo "- Проверены время, шесть сигналов, остановка голоса, запас и вкладки настроек"
+  echo "- Сняты скриншоты телефона и планшета"
+  echo "- Проверены logcat, crash buffer и ANR"
 } > "$SUMMARY"
-
 log_action "Полный Android QA завершён. Ошибок: ${FAILURES}"
 exit "$FAILURES"

@@ -40,30 +40,39 @@
     padding-inline: 10px;
   }
 
-  /* Частота, время и дозировка показываются компактной сеткой.
-     :has поддерживается современными Android WebView; без него остаётся безопасная одноколоночная раскладка. */
-  .progress-track + .ui-card .choice-grid:has(> button.choice) {
+  /* Класс добавляется компонентом, потому что старые Android WebView не поддерживают :has(). */
+  .progress-track + .ui-card .button-choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
-  .progress-track + .ui-card .choice-grid:has(> button.choice) > .choice {
+  .progress-track + .ui-card .button-choice-grid > .choice {
     min-height: 88px;
     padding: 10px;
   }
 
-  .progress-track + .ui-card .choice-grid:has(> button.choice) .choice__description {
+  .progress-track + .ui-card .button-choice-grid .choice__description {
     font-size: 0.78rem;
     line-height: 1.2;
+  }
+
+  /* Ручной выбор времени всегда виден первым и не прячется после семи карточек. */
+  .progress-track + .ui-card .button-choice-grid > .custom-time-choice {
+    order: -1;
+    grid-column: 1 / -1;
+    min-height: 72px;
+    border-color: var(--primary);
+    background: var(--surface-soft);
   }
 }
 
 @media (max-width: 360px) {
-  .optional-card > .choice-grid {
+  .optional-card > .choice-grid,
+  .progress-track + .ui-card .button-choice-grid {
     grid-template-columns: 1fr;
   }
 
-  .progress-track + .ui-card .choice-grid:has(> button.choice) {
-    grid-template-columns: 1fr;
+  .progress-track + .ui-card .button-choice-grid > .custom-time-choice {
+    grid-column: auto;
   }
 }

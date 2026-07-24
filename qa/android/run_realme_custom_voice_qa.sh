@@ -170,9 +170,26 @@ adb_quick shell cmd appops set "$PACKAGE" USE_EXACT_ALARM allow >/dev/null 2>&1 
 adb_quick logcat -c >/dev/null 2>&1 || true
 adb_medium shell am start -W -n "$COMPONENT" > "${LOG_DIR}/launch.txt" 2>&1 || { fail "Приложение не запустилось"; exit 1; }
 sleep 5
-snapshot "00-permissions-or-home"
-if tap_from_last "Разрешить уведомления"; then sleep 2; fi
+
+# Первое окно принадлежит самому приложению. WebView иногда не отдаёт его дерево,
+# поэтому нажимаем центр зелёной кнопки и затем проверяем результат скриншотом.
+snapshot "00-permission-intro"
+adb_quick shell input tap 540 1464 >/dev/null 2>&1 || true
+log_action "Закрыт стартовый экран разрешений нажатием на основную кнопку"
+sleep 2
+snapshot "00-after-permission-intro"
+# На Android 13+ может появиться системное окно. Разрешаем через текст, если оно доступно.
+if tap_from_last "Разрешить"; then sleep 2; fi
 snapshot "00-home-phone"
+# Если стартовое окно всё ещё осталось, безопасно выбираем «Сделать позже» и продолжаем UI-проверку.
+if contains_text "${XML_DIR}/00-home-phone.xml" "Разрешить напоминания?"; then
+  adb_quick shell input tap 540 1650 >/dev/null 2>&1 || true
+  log_action "Стартовое окно разрешений закрыто кнопкой «Сделать позже»"
+  sleep 2
+  snapshot "00-home-after-dismiss"
+  cp "${XML_DIR}/00-home-after-dismiss.xml" "${XML_DIR}/00-home-phone.xml" 2>/dev/null || true
+  cp "${SCREEN_DIR}/00-home-after-dismiss.png" "${SCREEN_DIR}/00-home-phone.png" 2>/dev/null || true
+fi
 assert_text "${XML_DIR}/00-home-phone.xml" "Добавить лекарство" "Главное действие добавления лекарства недоступно"
 
 phase "Добавление лекарства"

@@ -28,6 +28,27 @@ function updateNativeInput(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+function enhanceMedicineChoiceGrids() {
+  document.querySelectorAll<HTMLElement>('.choice-grid').forEach((grid) => {
+    const children = Array.from(grid.children)
+    const buttons = children.filter(
+      (child): child is HTMLButtonElement => child instanceof HTMLButtonElement && child.classList.contains('choice')
+    )
+
+    if (buttons.length >= 2 && buttons.length === children.length) {
+      grid.classList.add('button-choice-grid')
+    }
+
+    const customTime = buttons.find((button) =>
+      button.textContent?.replace(/\s+/g, ' ').includes('Своё время')
+    )
+    if (customTime) {
+      customTime.classList.add('custom-time-choice')
+      customTime.setAttribute('aria-label', 'Своё время — указать часы и минуты')
+    }
+  })
+}
+
 export function AndroidUxEnhancer() {
   const pathname = usePathname()
   const router = useRouter()
@@ -42,6 +63,15 @@ export function AndroidUxEnhancer() {
     return () => {
       delete root.dataset.globalBack
     }
+  }, [pathname])
+
+  useEffect(() => {
+    if (!pathname.includes('/add')) return
+
+    enhanceMedicineChoiceGrids()
+    const observer = new MutationObserver(() => enhanceMedicineChoiceGrids())
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
   }, [pathname])
 
   const openTimePicker = (input: HTMLInputElement) => {

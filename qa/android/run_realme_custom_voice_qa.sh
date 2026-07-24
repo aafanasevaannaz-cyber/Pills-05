@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-set -u
+set -uo pipefail
 
 APK_PATH="${1:-apk/app-debug.apk}"
 PACKAGE="com.moi.tabletki.reminder.safe"
 COMPONENT="com.moi.tabletki.reminder.safe/com.pills.reminder.MainActivity"
-RESULT_ROOT="qa-results/full-android-ux-qa"
+# Этот путь должен совпадать с путём, который загружает существующий workflow.
+RESULT_ROOT="qa-results/realme-c55-android12-sound-fix"
 SCREEN_DIR="${RESULT_ROOT}/screenshots"
 XML_DIR="${RESULT_ROOT}/ui-xml"
 LOG_DIR="${RESULT_ROOT}/logs"
@@ -16,28 +17,48 @@ mkdir -p "$SCREEN_DIR" "$XML_DIR" "$LOG_DIR"
 
 log_action() { printf '%s | %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" | tee -a "$ACTION_LOG"; }
 fail() { FAILURES=$((FAILURES + 1)); log_action "ОШИБКА: $*"; }
+phase() { log_action "ЭТАП: $*"; }
+
+adb_quick() { timeout 12s adb "$@"; }
+adb_medium() { timeout 35s adb "$@"; }
+adb_long() { timeout 180s adb "$@"; }
+
+finish_report() {
+  adb_quick shell wm size 1080x2400 >/dev/null 2>&1 || true
+  adb_quick shell wm density 400 >/dev/null 2>&1 || true
+  if [[ ! -s "$SUMMARY" ]]; then
+    {
+      echo "# Полный Android QA — realme C55 и планшетный размер"
+      echo
+      echo "- Ошибок сценария: ${FAILURES}"
+      echo "- Сценарий завершился досрочно; смотрите actions.txt и logs"
+    } > "$SUMMARY"
+  fi
+}
+trap finish_report EXIT
 
 dump_current() {
   local output="$1"
   rm -f "$output"
-  for attempt in 1 2 3 4; do
-    adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-    adb pull /sdcard/window.xml "$output" >/dev/null 2>&1 || true
+  for attempt in 1 2 3; do
+    timeout 10s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+    timeout 10s adb pull /sdcard/window.xml "$output" >/dev/null 2>&1 || true
     if [[ -s "$output" ]] && grep -F '<hierarchy' "$output" >/dev/null 2>&1; then return 0; fi
     sleep 1
   done
+  log_action "Не удалось получить UI XML: ${output}"
   return 1
 }
 
 capture() {
   local name="$1"
   sleep 1
-  adb exec-out screencap -p > "${SCREEN_DIR}/${name}.png" || true
+  timeout 12s adb exec-out screencap -p > "${SCREEN_DIR}/${name}.png" || true
   dump_current "${XML_DIR}/${name}.xml" || true
   log_action "Скриншот и XML: ${name}"
 }
 
-coords_for() { python3 qa/android/ui_pick.py "$1" "${@:2}" 2>/dev/null || true; }
+coords_for() { timeout 8s python3 qa/android/ui_pick.py "$1" "${@:2}" 2>/dev/null || true; }
 
 tap_text() {
   local text="$1" attempts="${2:-5}" index="${3:-0}"
@@ -47,7 +68,7 @@ tap_text() {
       coords="$(coords_for "$xml" --text "$text" --index "$index")"
       if [[ -n "$coords" ]]; then
         read -r x y <<<"$coords"
-        adb shell input tap "$x" "$y"
+        adb_quick shell input tap "$x" "$y" >/dev/null 2>&1 || true
         log_action "Нажато «${text}» (${x},${y}), попытка ${attempt}"
         sleep 1
         return 0
@@ -62,7 +83,7 @@ tap_text_scroll() {
   local text="$1" rounds="${2:-8}" index="${3:-0}"
   for ((round=1; round<=rounds; round+=1)); do
     if tap_text "$text" 2 "$index"; then return 0; fi
-    adb shell input swipe 540 1880 540 700 420
+    adb_quick shell input swipe 540 1880 540 700 420 >/dev/null 2>&1 || true
     log_action "Прокрутка для поиска «${text}», круг ${round}"
     sleep 1
   done
@@ -70,7 +91,7 @@ tap_text_scroll() {
   return 1
 }
 
-contains_text() { grep -F "$2" "$1" >/dev/null 2>&1; }
+contains_text() { [[ -s "$1" ]] && grep -F "$2" "$1" >/dev/null 2>&1; }
 
 assert_text() {
   local xml="$1" text="$2" message="$3"
@@ -84,12 +105,12 @@ assert_not_text() {
 
 tap_first_edit() {
   local xml="${RESULT_ROOT}/current.xml" coords x y
-  for attempt in 1 2 3 4; do
+  for attempt in 1 2 3; do
     dump_current "$xml" || true
     coords="$(coords_for "$xml" --class-name android.widget.EditText --index 0)"
     if [[ -n "$coords" ]]; then
       read -r x y <<<"$coords"
-      adb shell input tap "$x" "$y"
+      adb_quick shell input tap "$x" "$y" >/dev/null 2>&1 || true
       log_action "Нажато первое поле ввода (${x},${y})"
       sleep 1
       return 0
@@ -101,53 +122,55 @@ tap_first_edit() {
 }
 
 log_action "Начало полного QA: realme C55, Android 12, 1080x2400"
-adb wait-for-device
-adb shell settings put global window_animation_scale 0
-adb shell settings put global transition_animation_scale 0
-adb shell settings put global animator_duration_scale 0
-adb shell settings put system font_scale 1.0
-adb shell wm size 1080x2400
-adb shell wm density 400
+phase "Подготовка эмулятора"
+adb_medium wait-for-device || { fail "ADB не дождался устройства"; exit 1; }
+adb_quick shell settings put global window_animation_scale 0 >/dev/null 2>&1 || true
+adb_quick shell settings put global transition_animation_scale 0 >/dev/null 2>&1 || true
+adb_quick shell settings put global animator_duration_scale 0 >/dev/null 2>&1 || true
+adb_quick shell settings put system font_scale 1.0 >/dev/null 2>&1 || true
+adb_quick shell wm size 1080x2400 >/dev/null 2>&1 || true
+adb_quick shell wm density 400 >/dev/null 2>&1 || true
 
 {
-  adb shell wm size
-  adb shell wm density
-  adb shell getprop ro.build.version.release
-  adb shell getprop ro.build.version.sdk
-  adb shell getprop ro.product.model
-  adb shell date
+  adb_quick shell wm size
+  adb_quick shell wm density
+  adb_quick shell getprop ro.build.version.release
+  adb_quick shell getprop ro.build.version.sdk
+  adb_quick shell getprop ro.product.model
+  adb_quick shell date
 } > "${RESULT_ROOT}/device-info.txt" 2>&1
 
 [[ -f "$APK_PATH" ]] || APK_PATH="$(find apk -type f -name '*.apk' | head -n 1)"
 [[ -n "${APK_PATH:-}" && -f "$APK_PATH" ]] || { fail "APK не найден"; exit 1; }
 
-adb install -r "$APK_PATH" > "${LOG_DIR}/install.txt" 2>&1 || fail "APK не установился"
-adb shell pm clear "$PACKAGE" >/dev/null 2>&1 || true
-adb shell cmd appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true
-adb shell cmd appops set "$PACKAGE" USE_EXACT_ALARM allow >/dev/null 2>&1 || true
-adb logcat -c
-adb shell am start -W -n "$COMPONENT" > "${LOG_DIR}/launch.txt" 2>&1 || fail "Приложение не запустилось"
+phase "Установка и запуск APK"
+adb_long install -r "$APK_PATH" > "${LOG_DIR}/install.txt" 2>&1 || fail "APK не установился"
+adb_medium shell pm clear "$PACKAGE" >/dev/null 2>&1 || true
+adb_quick shell cmd appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true
+adb_quick shell cmd appops set "$PACKAGE" USE_EXACT_ALARM allow >/dev/null 2>&1 || true
+adb_quick logcat -c >/dev/null 2>&1 || true
+adb_medium shell am start -W -n "$COMPONENT" > "${LOG_DIR}/launch.txt" 2>&1 || fail "Приложение не запустилось"
 sleep 5
 if tap_text "Разрешить уведомления" 3; then sleep 2; fi
 capture "00-home-phone"
 assert_text "${XML_DIR}/00-home-phone.xml" "Лекарств пока нет" "Пустой главный экран отображается неправильно"
 
-# Полный путь добавления лекарства.
+phase "Добавление лекарства и навигация"
 if ! tap_text "Добавить первое лекарство" 4; then tap_text "+ Добавить" 4 || fail "Не открывается добавление лекарства"; fi
 capture "01-add-name"
 assert_text "${XML_DIR}/01-add-name.xml" "Шаг 1 из 5" "Экран добавления не открылся"
 assert_text "${XML_DIR}/01-add-name.xml" "Назад" "Сверху нет постоянно доступной кнопки назад"
 
 if tap_first_edit; then
-  adb shell input text "TestMed"
-  adb shell input keyevent 4
+  adb_quick shell input text "TestMed" >/dev/null 2>&1 || true
+  adb_quick shell input keyevent 4 >/dev/null 2>&1 || true
   sleep 1
 fi
 tap_text_scroll "Продолжить" 4 || true
 tap_text "Каждый день" 4 || fail "Не выбирается ежедневный приём"
 tap_text "Продолжить" 4 || fail "Не открывается выбор времени"
 
-# Проверяем собственный выбор времени вместо синего системного диалога.
+phase "Собственный выбор времени"
 tap_text "Своё время" 4 || fail "Нет выбора своего времени"
 if tap_first_edit; then sleep 1; fi
 capture "02-custom-time-picker"
@@ -162,7 +185,7 @@ tap_text "+ 5 минут" 3 || true
 tap_text "Выбрать" 3 || fail "Не подтверждается собственное время"
 tap_text "Продолжить" 5 || fail "После выбора времени не открывается звук"
 
-# Шесть реально разных сигналов и предпросмотр выбранного ресурса.
+phase "Шесть сигналов и выбранный звуковой ресурс"
 capture "03-six-sounds"
 for sound_name in \
   "Мягкий звонок" \
@@ -174,21 +197,21 @@ for sound_name in \
   assert_text "${XML_DIR}/03-six-sounds.xml" "$sound_name" "На экране отсутствует сигнал «${sound_name}»"
 done
 
-adb logcat -c
+adb_quick logcat -c >/dev/null 2>&1 || true
 tap_text_scroll "Деревянный стук" 8 || true
 sleep 2
-adb logcat -d > "${LOG_DIR}/wood-preview.txt" 2>&1 || true
+adb_medium logcat -d > "${LOG_DIR}/wood-preview.txt" 2>&1 || true
 grep -F "Native alarm sound started: medicine_wood_" "${LOG_DIR}/wood-preview.txt" >/dev/null \
   || fail "Деревянный сигнал не запускает отдельный звуковой файл"
 
-# Главная регрессия: остановка до запуска отложенного голоса.
+phase "Остановка сигнала до запуска голоса"
 tap_text_scroll "Русский голос Android" 8 || true
-adb logcat -c
+adb_quick logcat -c >/dev/null 2>&1 || true
 tap_text_scroll "Быстро проверить всё напоминание" 14 || true
 sleep 1
 tap_text "Остановить звук" 5 || fail "Кнопка остановки недоступна"
 sleep 5
-adb logcat -d > "${LOG_DIR}/stop-preview.txt" 2>&1 || true
+adb_medium logcat -d > "${LOG_DIR}/stop-preview.txt" 2>&1 || true
 grep -F "Delayed reminder voice cancelled before start" "${LOG_DIR}/stop-preview.txt" >/dev/null \
   || fail "Отложенный голос не был отменён после остановки"
 if grep -F "Russian alarm-stream voice started" "${LOG_DIR}/stop-preview.txt" >/dev/null; then
@@ -196,7 +219,7 @@ if grep -F "Russian alarm-stream voice started" "${LOG_DIR}/stop-preview.txt" >/
 fi
 capture "04-sound-stopped"
 
-# Последний шаг: дополнительные параметры не должны выглядеть как россыпь карточек.
+phase "Дозировка и учёт запаса"
 tap_text_scroll "Продолжить" 12 || true
 capture "05-dose-optional-collapsed"
 assert_text "${XML_DIR}/05-dose-optional-collapsed.xml" "Следить, сколько лекарства осталось" "Нет необязательного учёта запаса"
@@ -206,9 +229,9 @@ capture "06-stock-expanded"
 assert_text "${XML_DIR}/06-stock-expanded.xml" "Сколько осталось" "Учёт запаса не раскрывается"
 assert_text "${XML_DIR}/06-stock-expanded.xml" "За один приём" "Нет расхода за приём"
 
-# Настройки разбиты на вкладки, а не одну длинную простыню.
+phase "Короткие вкладки настроек"
 tap_text "Настройки" 5 || {
-  adb shell input keyevent 4
+  adb_quick shell input keyevent 4 >/dev/null 2>&1 || true
   sleep 1
   tap_text "Настройки" 5 || fail "Не открываются настройки"
 }
@@ -221,17 +244,17 @@ tap_text "Вид" 3 || fail "Не открывается вкладка внеш
 capture "08-settings-appearance"
 assert_text "${XML_DIR}/08-settings-appearance.xml" "Размер текста" "Во вкладке «Вид» нет размера текста"
 
-# Планшетный размер: интерфейс должен оставаться доступным и без наложений.
-adb shell wm size 1920x1200
-adb shell wm density 240
-adb shell am force-stop "$PACKAGE"
-adb shell am start -W -n "$COMPONENT" > "${LOG_DIR}/tablet-launch.txt" 2>&1 || fail "Приложение не запустилось в планшетном размере"
+phase "Планшетный размер"
+adb_quick shell wm size 1920x1200 >/dev/null 2>&1 || true
+adb_quick shell wm density 240 >/dev/null 2>&1 || true
+adb_quick shell am force-stop "$PACKAGE" >/dev/null 2>&1 || true
+adb_medium shell am start -W -n "$COMPONENT" > "${LOG_DIR}/tablet-launch.txt" 2>&1 || fail "Приложение не запустилось в планшетном размере"
 sleep 4
 capture "09-tablet-settings"
 assert_text "${XML_DIR}/09-tablet-settings.xml" "Настройки" "Настройки пропали на планшетном размере"
 assert_text "${XML_DIR}/09-tablet-settings.xml" "Назад" "На планшете нет доступной кнопки назад"
 
-# Статические проверки критической логики.
+phase "Статические проверки и crash buffer"
 grep -F "previewGeneration" src/features/sound/nativeAudio.ts >/dev/null \
   || fail "Предпросмотр не имеет токена отмены"
 grep -F "AUDIO_GENERATION" android/app/src/main/java/com/pills/reminder/ReminderVoiceService.java >/dev/null \
@@ -245,10 +268,10 @@ for sound_id in chime wood pulse; do
     || fail "При сборке не создан web-ресурс medicine_${sound_id}_normal.wav"
 done
 
-adb shell wm size 1080x2400
-adb shell wm density 400
-adb logcat -d > "${LOG_DIR}/full-logcat.txt" 2>&1 || true
-adb logcat -b crash -d > "${LOG_DIR}/crash-buffer.txt" 2>&1 || true
+adb_quick shell wm size 1080x2400 >/dev/null 2>&1 || true
+adb_quick shell wm density 400 >/dev/null 2>&1 || true
+adb_medium logcat -d > "${LOG_DIR}/full-logcat.txt" 2>&1 || true
+adb_medium logcat -b crash -d > "${LOG_DIR}/crash-buffer.txt" 2>&1 || true
 if grep -F "Process: ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null \
   || grep -F "ANR in ${PACKAGE}" "${LOG_DIR}/full-logcat.txt" "${LOG_DIR}/crash-buffer.txt" >/dev/null; then
   fail "Найдено падение или ANR приложения"

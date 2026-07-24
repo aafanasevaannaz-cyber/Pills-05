@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import '@/styles/globals.css'
+import '@/styles/base-ui-restored.css'
 import '@/styles/realme-fixes.css'
 import '@/styles/reminders.css'
 import '@/styles/soft-contrast.css'

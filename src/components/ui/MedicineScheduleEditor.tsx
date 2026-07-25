@@ -109,7 +109,7 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
                     min={0}
                     max={59}
                     value={minutes}
-                    onChange={(event) => replace(index, normalizeTime(hours, Number(event.target.value))}
+                    onChange={(event) => replace(index, normalizeTime(hours, Number(event.target.value)))}
                   />
                 </label>
               </div>

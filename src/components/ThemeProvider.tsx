@@ -19,7 +19,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.dataset.theme = theme
     root.dataset.textSize = textSize
     root.dataset.font = font
-    root.style.setProperty('--animation-duration', reduceAnimations ? '0ms' : '180ms')
+    root.style.setProperty('--animation-duration', reduceAnimations ? '0ms' : '240ms')
+    root.dataset.reduceMotion = reduceAnimations ? 'true' : 'false'
 
     if (Capacitor.isNativePlatform()) {
       const style = theme === 'light' ? SystemBarsStyle.Light : SystemBarsStyle.Dark

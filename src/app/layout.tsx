@@ -7,6 +7,7 @@ import '@/styles/soft-contrast.css'
 import '@/styles/brand-autocomplete.css'
 import '@/styles/qa-ux.css'
 import '@/styles/qa-ux-polish.css'
+import '@/styles/rebuild2.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { DiagnosticsProvider } from '@/components/DiagnosticsProvider'
 import { BottomNav } from '@/components/BottomNav'
@@ -14,7 +15,7 @@ import { BrandMark } from '@/components/BrandMark'
 import { AndroidUxEnhancer } from '@/components/AndroidUxEnhancer'
 
 export const metadata: Metadata = {
-  title: 'По часам',
+  title: 'По часам 2',
   description: 'Понятные напоминания о приёме лекарств',
 }
 

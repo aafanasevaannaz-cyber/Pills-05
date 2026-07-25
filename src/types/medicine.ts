@@ -19,6 +19,7 @@ export interface Medicine {
     | 'three_times'
     | 'custom'
   customTimes?: string[]
+  paused?: boolean
   reminderSound?: ReminderSound
   reminderVolume?: ReminderVolume
   voiceEnabled?: boolean
@@ -26,6 +27,8 @@ export interface Medicine {
   voiceVolume?: ReminderVolume
   customVoiceVolume?: ReminderVolume
   voiceRate?: VoiceRate
+  androidVoiceName?: string
+  voicePitch?: number
   customVoicePath?: string
   endDate?: Date
   stockQuantity?: number

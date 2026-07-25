@@ -1,128 +1,100 @@
 .brand-mark {
-  width: 108px;
-  margin: 14px auto 2px;
+  width: 104px;
+  margin: 12px auto 2px;
   display: grid;
   justify-items: center;
-  color: var(--text-muted);
-  opacity: 0.12;
+  opacity: 0.09;
   pointer-events: none;
   user-select: none;
 }
 
 .brand-mark--compact {
-  width: 138px;
+  width: 126px;
   margin: 0 auto 2px;
-  opacity: 0.17;
+  opacity: 0.12;
 }
 
 .brand-mark__image {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 38px;
+  max-height: 34px;
   object-fit: contain;
 }
 
-.brand-mark--compact .brand-mark__image {
-  max-height: 46px;
-}
-
-.brand-mark__caption {
-  display: none;
-}
-
-.app-brand-footer {
-  padding: 0 18px calc(7px + var(--safe-bottom));
-}
+.brand-mark--compact .brand-mark__image { max-height: 40px; }
+.brand-mark__caption { display: none; }
+.app-brand-footer { padding: 0 18px calc(6px + var(--safe-bottom)); }
 
 .medicine-autocomplete {
   position: relative;
-  z-index: 2;
+  z-index: 210;
 }
 
 .medicine-autocomplete__input {
-  background: var(--surface-soft);
-}
-
-.medicine-autocomplete__help {
-  margin-bottom: 0;
-}
-
-.medicine-autocomplete__complete {
-  width: 100%;
-  min-height: 60px;
-  margin-top: 8px;
-  border: 2px solid var(--primary);
-  border-radius: 15px;
-  background: var(--success-soft);
-  color: var(--text);
-  padding: 11px 14px;
-  text-align: left;
-  font-weight: 760;
-  cursor: pointer;
-  box-shadow: none;
-}
-
-.medicine-autocomplete__complete span {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  font-weight: 650;
-}
-
-.medicine-autocomplete__complete strong {
-  display: block;
-  margin-top: 2px;
-  font-size: 1.12rem;
-  overflow-wrap: anywhere;
+  position: relative;
+  z-index: 2;
+  background: var(--surface);
 }
 
 .medicine-suggestions {
-  position: static;
+  position: absolute;
+  z-index: 220;
+  top: calc(100% - 2px);
+  left: 0;
+  right: 0;
   display: grid;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 15px;
-  background: var(--surface-soft);
-  box-shadow: none;
-}
-
-.medicine-suggestions__title {
-  margin: 0 3px 2px;
-  color: var(--text-muted);
-  font-size: 0.86rem;
-  font-weight: 750;
+  max-height: min(240px, 36vh);
+  overflow-y: auto;
+  padding: 8px;
+  border: 2px solid var(--primary);
+  border-radius: 0 0 17px 17px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 36px rgba(33, 31, 27, 0.28);
+  animation: autocomplete-open 220ms ease-out both;
 }
 
 .medicine-suggestion {
   width: 100%;
-  min-height: 50px;
-  border: 1px solid var(--border);
-  border-radius: 13px;
+  min-height: 48px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px;
   background: var(--surface);
   color: var(--text);
-  padding: 10px 13px;
+  padding: 10px 12px;
   text-align: left;
-  font-weight: 760;
+  font-weight: 680;
   cursor: pointer;
-  overflow-wrap: anywhere;
 }
 
-.medicine-suggestion:active,
-.medicine-autocomplete__complete:active {
-  transform: scale(0.99);
+.medicine-suggestion:last-child { border-bottom: 0; }
+.medicine-suggestion:active { background: var(--surface-strong); }
+.medicine-suggestion strong { font-weight: 900; color: var(--primary); }
+
+html[data-autocomplete-open='true'] .bottom-nav,
+html[data-autocomplete-open='true'] .app-brand-footer,
+html[data-keyboard-open='true'] .bottom-nav,
+html[data-keyboard-open='true'] .app-brand-footer {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(105%);
+}
+
+@keyframes autocomplete-open {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 [data-theme='dark'] .brand-mark__image,
 [data-theme='high-contrast'] .brand-mark__image {
-  filter: brightness(1.05) saturate(0.72);
+  filter: brightness(1.05) saturate(0.7);
 }
 
 @media (min-width: 720px) and (min-height: 600px) {
-  .brand-mark { width: 126px; }
-  .brand-mark--compact { width: 154px; }
+  .brand-mark { width: 118px; }
+  .brand-mark--compact { width: 140px; }
   .app-brand-footer { padding-left: calc(124px + var(--safe-left)); }
 }
 

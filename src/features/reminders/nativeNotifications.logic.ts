@@ -1,8 +1,8 @@
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Medicine } from '@/types'
-import { formatDosage } from '@/lib/formatMedicine'
-import { getRefillReminderDate, formatStockDays } from '@/lib/stock'
+import { formatDosage, getMedicineTimes } from '@/lib/formatMedicine'
+import { formatStockDays, getRefillReminderDate } from '@/lib/stock'
 import { useSettingsStore } from '@/features/settings/store'
 import {
   cancelAllNativeVoiceAlarms,
@@ -15,9 +15,6 @@ import {
   defaultReminderVolume,
   defaultVoiceVolume,
   getReminderChannelId,
-  getReminderResource,
-  getReminderSoundOption,
-  getReminderVolumeOption,
   type ReminderSound,
   type ReminderVolume,
   type VoiceMode,
@@ -31,14 +28,9 @@ import {
 } from './notificationIds.logic'
 
 export const isNativeNotificationsAvailable = (): boolean => Capacitor.isNativePlatform()
-
 const selectedSound = (): ReminderSound => useSettingsStore.getState().soundChoice
 const selectedVolume = (): ReminderVolume => useSettingsStore.getState().volumeChoice
-
-const voiceRequestCode = (notificationId: number): number => {
-  const code = (Math.abs(notificationId) + 611_000_000) % 2_000_000_000
-  return code === 0 ? 611_000_001 : code
-}
+const voiceRequestCode = (id: number) => Math.max(1, (Math.abs(id) + 611_000_000) % 2_000_000_000)
 
 const getVoiceMode = (medicine: Medicine): VoiceMode => {
   if (medicine.voiceMode === 'android' || medicine.voiceMode === 'recorded' || medicine.voiceMode === 'off') {
@@ -48,76 +40,44 @@ const getVoiceMode = (medicine: Medicine): VoiceMode => {
   return medicine.customVoicePath ? 'recorded' : 'android'
 }
 
-const getMedicineVoiceVolume = (medicine: Medicine): ReminderVolume =>
+const getVoiceVolume = (medicine: Medicine): ReminderVolume =>
   getVoiceMode(medicine) === 'recorded'
     ? medicine.customVoiceVolume ?? medicine.voiceVolume ?? defaultVoiceVolume
     : medicine.voiceVolume ?? defaultVoiceVolume
 
-const scheduleAudioForNotification = async (
+const scheduleAudio = async (
   notificationId: number,
   medicine: Medicine,
   triggerAt: Date,
   repeatDays: number,
-  soundChoice: ReminderSound,
-  alarmVolume: ReminderVolume
-): Promise<void> => {
-  const desiredLeadMs = 700
-  const availableLeadMs = Math.max(0, triggerAt.getTime() - Date.now() - 150)
-  const leadMs = Math.min(desiredLeadMs, availableLeadMs)
-  const serviceTime = new Date(triggerAt.getTime() - leadMs)
-  const delayBeforeVoiceMs = getReminderSoundOption(soundChoice).previewDelayMs + leadMs + 300
-
+  sound: ReminderSound,
+  volume: ReminderVolume
+) => {
   await scheduleNativeVoiceAlarm({
     requestCode: voiceRequestCode(notificationId),
     medicineId: medicine.id,
-    triggerAt: serviceTime,
+    triggerAt,
     repeatDays,
+    sound,
+    alarmVolume: volume,
     medicineName: medicine.name,
     dosage: formatDosage(medicine.dosage),
     voiceRate: medicine.voiceRate ?? 'slow',
     voiceMode: getVoiceMode(medicine),
-    voiceVolume: getMedicineVoiceVolume(medicine),
-    alarmVolume,
-    delayBeforeVoiceMs,
+    voiceVolume: getVoiceVolume(medicine),
+    voicePitch: medicine.voicePitch ?? 1,
+    androidVoiceName: medicine.androidVoiceName ?? '',
     customVoicePath: medicine.customVoicePath,
-  }).catch((error) => {
-    console.error('Background reminder audio scheduling failed:', error)
-  })
+  }).catch((error) => console.error('Reminder sequence scheduling failed:', error))
 }
 
 export const ensureReminderChannel = async (
-  soundChoice: ReminderSound = selectedSound(),
-  volumeChoice: ReminderVolume = selectedVolume()
+  sound: ReminderSound = selectedSound(),
+  volume: ReminderVolume = selectedVolume()
 ): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return false
-
   try {
-    await ensureNativeReminderChannel(soundChoice, volumeChoice)
-    return true
-  } catch (nativeError) {
-    console.error('Native alarm channel creation failed:', nativeError)
-  }
-
-  const soundOption = getReminderSoundOption(soundChoice)
-  const volumeOption = getReminderVolumeOption(volumeChoice)
-  const channelId = getReminderChannelId(soundChoice, volumeChoice)
-
-  try {
-    const result = await LocalNotifications.listChannels()
-    const exists = result.channels.some((channel) => channel.id === channelId)
-    if (exists) return true
-
-    await LocalNotifications.createChannel({
-      id: channelId,
-      name: `Лекарства — ${soundOption.title}, ${volumeOption.title.toLowerCase()}`,
-      description: 'Громкие напоминания о лекарствах.',
-      sound: getReminderResource(soundChoice, volumeChoice),
-      importance: 5,
-      visibility: 1,
-      vibration: true,
-      lights: true,
-      lightColor: '#2F6B4F',
-    })
+    await ensureNativeReminderChannel(sound, volume)
     return true
   } catch (error) {
     console.error('Notification channel creation failed:', error)
@@ -127,13 +87,11 @@ export const ensureReminderChannel = async (
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return false
-
   try {
     const current = await LocalNotifications.checkPermissions()
     const granted = current.display === 'granted'
       ? true
       : (await LocalNotifications.requestPermissions()).display === 'granted'
-
     if (granted) await ensureReminderChannel()
     return granted
   } catch (error) {
@@ -144,10 +102,8 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 
 export const hasExactReminderPermission = async (): Promise<boolean> => {
   if (!isNativeNotificationsAvailable()) return true
-
   try {
-    const result = await LocalNotifications.checkExactNotificationSetting()
-    return result.exact_alarm === 'granted'
+    return (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
   } catch {
     return true
   }
@@ -155,105 +111,60 @@ export const hasExactReminderPermission = async (): Promise<boolean> => {
 
 export const openExactReminderSettings = async (): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
-  try {
-    await LocalNotifications.changeExactNotificationSetting()
-  } catch (error) {
+  await LocalNotifications.changeExactNotificationSetting().catch((error) => {
     console.error('Exact reminder settings failed:', error)
-  }
+  })
 }
 
-const notificationBody = (medicine: Medicine) =>
-  `${medicine.name}. Дозировка: ${formatDosage(medicine.dosage)}`
-
-const notificationBase = (
-  medicine: Medicine,
-  time: string,
-  soundChoice: ReminderSound,
-  volumeChoice: ReminderVolume
-) => ({
+const notificationBase = (medicine: Medicine, time: string) => ({
   title: 'Пора принять лекарство',
-  body: notificationBody(medicine),
-  largeBody: `${notificationBody(medicine)}. Запланированное время: ${time}.`,
-  sound: getReminderResource(soundChoice, volumeChoice),
-  channelId: getReminderChannelId(soundChoice, volumeChoice),
-  extra: {
-    medicineId: medicine.id,
-    time,
-    soundChoice,
-    volumeChoice,
-    voiceMode: getVoiceMode(medicine),
-    voiceVolume: getMedicineVoiceVolume(medicine),
-    voiceRate: medicine.voiceRate ?? 'slow',
-    hasCustomVoice: Boolean(medicine.customVoicePath),
-  },
+  body: `${medicine.name}. ${formatDosage(medicine.dosage)}.`,
+  largeBody: `${medicine.name}. ${formatDosage(medicine.dosage)}. Время: ${time}.`,
+  channelId: getReminderChannelId(),
   autoCancel: true,
+  extra: { medicineId: medicine.id, time },
 })
 
-const scheduleDailyNotification = async (
-  medicine: Medicine,
-  time: string,
-  soundChoice: ReminderSound,
-  volumeChoice: ReminderVolume
-): Promise<number | null> => {
+const nextAt = (time: string) => {
   const [hour, minute] = time.split(':').map(Number)
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null
-
-  const notificationId = generateNotificationId(medicine.id, time)
-  await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: notificationId,
-        ...notificationBase(medicine, time, soundChoice, volumeChoice),
-        schedule: { on: { hour, minute }, allowWhileIdle: true },
-      },
-    ],
-  })
-
   const next = new Date()
   next.setHours(hour, minute, 0, 0)
   if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1)
-  addToCache(notificationId, medicine.id, time, next)
-  await scheduleAudioForNotification(
-    notificationId,
-    medicine,
-    next,
-    1,
-    soundChoice,
-    volumeChoice
-  )
-  return notificationId
+  return next
 }
 
-const scheduleOneTimeNotification = async (
+const scheduleDaily = async (
   medicine: Medicine,
   time: string,
-  scheduledTime: Date,
-  soundChoice: ReminderSound,
-  volumeChoice: ReminderVolume
+  sound: ReminderSound,
+  volume: ReminderVolume
 ): Promise<number | null> => {
-  const dateKey = scheduledTime.toISOString().slice(0, 10)
-  const notificationId = generateNotificationId(medicine.id, `${time}-${dateKey}`)
-
+  const [hour, minute] = time.split(':').map(Number)
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null
+  const id = generateNotificationId(medicine.id, time)
   await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: notificationId,
-        ...notificationBase(medicine, time, soundChoice, volumeChoice),
-        schedule: { at: scheduledTime, allowWhileIdle: true },
-      },
-    ],
+    notifications: [{ id, ...notificationBase(medicine, time), schedule: { on: { hour, minute }, allowWhileIdle: true } }],
   })
+  const next = nextAt(time)
+  addToCache(id, medicine.id, time, next)
+  await scheduleAudio(id, medicine, next, 1, sound, volume)
+  return id
+}
 
-  addToCache(notificationId, medicine.id, time, scheduledTime)
-  await scheduleAudioForNotification(
-    notificationId,
-    medicine,
-    scheduledTime,
-    0,
-    soundChoice,
-    volumeChoice
-  )
-  return notificationId
+const scheduleOnce = async (
+  medicine: Medicine,
+  time: string,
+  at: Date,
+  sound: ReminderSound,
+  volume: ReminderVolume
+): Promise<number> => {
+  const id = generateNotificationId(medicine.id, `${time}-${at.toISOString().slice(0, 10)}`)
+  await LocalNotifications.schedule({
+    notifications: [{ id, ...notificationBase(medicine, time), schedule: { at, allowWhileIdle: true } }],
+  })
+  addToCache(id, medicine.id, time, at)
+  await scheduleAudio(id, medicine, at, 0, sound, volume)
+  return id
 }
 
 type TestVoiceOptions = {
@@ -262,99 +173,82 @@ type TestVoiceOptions = {
   customVoiceVolume?: ReminderVolume
   customVoicePath?: string
   voiceRate?: VoiceRate
+  voicePitch?: number
+  androidVoiceName?: string
 }
 
 export const scheduleTestNotification = async (
-  soundChoice: ReminderSound = selectedSound(),
-  volumeChoice: ReminderVolume = selectedVolume(),
-  voiceOptions: TestVoiceOptions = {}
+  sound: ReminderSound = selectedSound(),
+  volume: ReminderVolume = selectedVolume(),
+  voice: TestVoiceOptions = {}
 ): Promise<boolean> => {
-  if (!isNativeNotificationsAvailable()) return false
-  const hasPermission = await requestNotificationPermission()
-  if (!hasPermission) return false
-
-  const exactAllowed = await hasExactReminderPermission()
-  if (!exactAllowed) {
+  if (!isNativeNotificationsAvailable() || !(await requestNotificationPermission())) return false
+  if (!(await hasExactReminderPermission())) {
     await openExactReminderSettings()
     return false
   }
-
-  await ensureReminderChannel(soundChoice, volumeChoice)
-  const soundOption = getReminderSoundOption(soundChoice)
-  const volumeOption = getReminderVolumeOption(volumeChoice)
-  const notificationId = Math.floor(Date.now() % 2_000_000_000)
-  const triggerAt = new Date(Date.now() + 4000)
-  const voiceMode = voiceOptions.voiceMode ?? useSettingsStore.getState().defaultVoiceMode ?? 'android'
-  const customVoicePath = voiceOptions.customVoicePath ?? useSettingsStore.getState().customVoicePath
-  const effectiveMode = voiceMode === 'recorded' && !customVoicePath ? 'android' : voiceMode
-  const voiceVolume = effectiveMode === 'recorded'
-    ? voiceOptions.customVoiceVolume ?? useSettingsStore.getState().customVoiceVolume ?? defaultVoiceVolume
-    : voiceOptions.voiceVolume ?? useSettingsStore.getState().voiceVolume ?? defaultVoiceVolume
+  await ensureReminderChannel(sound, volume)
+  const settings = useSettingsStore.getState()
+  const id = Math.floor(Date.now() % 2_000_000_000)
+  const at = new Date(Date.now() + 4000)
+  const requestedMode = voice.voiceMode ?? settings.defaultVoiceMode
+  const customPath = voice.customVoicePath ?? settings.customVoicePath
+  const mode = requestedMode === 'recorded' && !customPath ? 'android' : requestedMode
+  const voiceVolume = mode === 'recorded'
+    ? voice.customVoiceVolume ?? settings.customVoiceVolume
+    : voice.voiceVolume ?? settings.voiceVolume
 
   await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: notificationId,
-        title: 'Проверка напоминания',
-        body: `${soundOption.title}. Громкость: ${volumeOption.title.toLowerCase()}.`,
-        largeBody: 'Проверка сигнала и выбранного голоса при закрытом приложении.',
-        sound: getReminderResource(soundChoice, volumeChoice),
-        channelId: getReminderChannelId(soundChoice, volumeChoice),
-        autoCancel: true,
-        schedule: { at: triggerAt, allowWhileIdle: true },
-        extra: { test: true, soundChoice, volumeChoice },
-      },
-    ],
+    notifications: [{
+      id,
+      title: 'Тестовое напоминание',
+      body: 'Пора принять лекарство.',
+      channelId: getReminderChannelId(),
+      autoCancel: true,
+      schedule: { at, allowWhileIdle: true },
+      extra: { test: true },
+    }],
   })
-
-  const leadMs = 700
   await scheduleNativeVoiceAlarm({
-    requestCode: voiceRequestCode(notificationId),
-    medicineId: `__test__${notificationId}`,
-    triggerAt: new Date(triggerAt.getTime() - leadMs),
+    requestCode: voiceRequestCode(id),
+    medicineId: `__test__${id}`,
+    triggerAt: at,
     repeatDays: 0,
-    medicineName: 'Зенон',
+    sound,
+    alarmVolume: volume,
+    medicineName: 'по расписанию',
     dosage: '1 таблетка',
-    voiceRate: voiceOptions.voiceRate ?? useSettingsStore.getState().voiceRate,
-    voiceMode: effectiveMode,
+    voiceRate: voice.voiceRate ?? settings.voiceRate,
+    voiceMode: mode,
     voiceVolume,
-    alarmVolume: volumeChoice,
-    delayBeforeVoiceMs: getReminderSoundOption(soundChoice).previewDelayMs + leadMs + 300,
-    customVoicePath,
-  }).catch((error) => {
-    console.error('Test reminder audio scheduling failed:', error)
+    voicePitch: voice.voicePitch ?? settings.voicePitch,
+    androidVoiceName: voice.androidVoiceName ?? settings.androidVoiceName,
+    customVoicePath: customPath,
   })
   return true
 }
 
 export const cancelNotification = async (notificationId: number): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
-  try {
-    await LocalNotifications.cancel({ notifications: [{ id: notificationId }] })
-    removeFromCache(notificationId)
-  } catch (error) {
+  await LocalNotifications.cancel({ notifications: [{ id: notificationId }] }).catch((error) => {
     console.error('Cancel notification failed:', error)
-  }
+  })
+  removeFromCache(notificationId)
 }
 
 export const cancelAllNotificationsForMedicine = async (medicineId: string): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
-
   try {
     const pending = await LocalNotifications.getPending()
     const pendingIds = pending.notifications
       .filter((notification) => notification.extra?.medicineId === medicineId)
       .map((notification) => notification.id)
-    const cachedIds = getCachedNotifications(medicineId)
-    const ids = Array.from(new Set([...pendingIds, ...cachedIds]))
-
-    if (ids.length > 0) {
-      await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) })
-      ids.forEach(removeFromCache)
-    }
+    const ids = Array.from(new Set([...pendingIds, ...getCachedNotifications(medicineId)]))
+    if (ids.length) await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) })
+    ids.forEach(removeFromCache)
     await cancelNativeVoiceAlarmsForMedicine(medicineId)
   } catch (error) {
-    console.error('Cancel all notifications failed:', error)
+    console.error('Cancel medicine notifications failed:', error)
   }
 }
 
@@ -362,10 +256,8 @@ export const cancelAllNotifications = async (): Promise<void> => {
   if (!isNativeNotificationsAvailable()) return
   try {
     const pending = await LocalNotifications.getPending()
-    if (pending.notifications.length > 0) {
-      await LocalNotifications.cancel({
-        notifications: pending.notifications.map((notification) => ({ id: notification.id })),
-      })
+    if (pending.notifications.length) {
+      await LocalNotifications.cancel({ notifications: pending.notifications.map(({ id }) => ({ id })) })
     }
     await cancelAllNativeVoiceAlarms()
   } catch (error) {
@@ -373,135 +265,72 @@ export const cancelAllNotifications = async (): Promise<void> => {
   }
 }
 
-const getTimesForScheduleType = (scheduleType: string): string[] => {
-  const times: Record<string, string[]> = {
-    morning: ['08:00'],
-    afternoon: ['14:00'],
-    evening: ['20:00'],
-    night: ['22:00'],
-    twice: ['08:00', '20:00'],
-    three_times: ['08:00', '14:00', '20:00'],
-  }
-  return times[scheduleType] || []
-}
-
-const getOccurrences = (
-  medicine: Medicine,
-  time: string,
-  intervalDays: 1 | 2,
-  maximumCount: number
-): Date[] => {
-  const [hour, minute] = time.split(':').map(Number)
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return []
-
+const occurrences = (medicine: Medicine, time: string, intervalDays: 1 | 2): Date[] => {
+  const first = nextAt(time)
   const created = new Date(medicine.createdAt)
   created.setHours(0, 0, 0, 0)
-  const candidate = new Date()
-  candidate.setHours(hour, minute, 0, 0)
-  while (candidate.getTime() <= Date.now()) candidate.setDate(candidate.getDate() + 1)
-
   if (intervalDays === 2) {
-    const candidateDay = new Date(candidate)
-    candidateDay.setHours(0, 0, 0, 0)
-    const daysSinceCreation = Math.floor(
-      (candidateDay.getTime() - created.getTime()) / (24 * 60 * 60 * 1000)
-    )
-    if (Math.abs(daysSinceCreation) % 2 !== 0) candidate.setDate(candidate.getDate() + 1)
+    const day = new Date(first)
+    day.setHours(0, 0, 0, 0)
+    const difference = Math.floor((day.getTime() - created.getTime()) / 86_400_000)
+    if (Math.abs(difference) % 2 !== 0) first.setDate(first.getDate() + 1)
   }
-
-  const endDate = medicine.endDate ? new Date(medicine.endDate) : null
   const horizon = new Date()
-  horizon.setDate(horizon.getDate() + (intervalDays === 2 ? 366 : 365))
-  const finalDate = endDate && endDate < horizon ? endDate : horizon
-  const occurrences: Date[] = []
-
-  while (candidate <= finalDate && occurrences.length < maximumCount) {
-    occurrences.push(new Date(candidate))
-    candidate.setDate(candidate.getDate() + intervalDays)
+  horizon.setDate(horizon.getDate() + 366)
+  const end = medicine.endDate && new Date(medicine.endDate) < horizon ? new Date(medicine.endDate) : horizon
+  const result: Date[] = []
+  while (first <= end && result.length < 366) {
+    result.push(new Date(first))
+    first.setDate(first.getDate() + intervalDays)
   }
-  return occurrences
+  return result
 }
 
-const scheduleRefillNotification = async (
-  medicine: Medicine,
-  soundChoice: ReminderSound,
-  volumeChoice: ReminderVolume
-): Promise<number | null> => {
-  const refillAt = getRefillReminderDate(medicine)
-  if (!refillAt || refillAt.getTime() <= Date.now()) return null
-  const notificationId = generateNotificationId(medicine.id, 'refill-stock')
-  const stockText = formatStockDays(medicine)
-
+const scheduleRefill = async (medicine: Medicine): Promise<number | null> => {
+  const at = getRefillReminderDate(medicine)
+  if (!at || at.getTime() <= Date.now()) return null
+  const id = generateNotificationId(medicine.id, 'refill-stock')
   await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: notificationId,
-        title: 'Пора пополнить запас лекарства',
-        body: `${medicine.name}: ${stockText ?? 'запас скоро закончится'}.`,
-        largeBody: `Проверьте запас лекарства «${medicine.name}» заранее, чтобы не пропустить приём.`,
-        sound: getReminderResource(soundChoice, volumeChoice),
-        channelId: getReminderChannelId(soundChoice, volumeChoice),
-        autoCancel: true,
-        schedule: { at: refillAt, allowWhileIdle: true },
-        extra: { medicineId: medicine.id, refill: true },
-      },
-    ],
+    notifications: [{
+      id,
+      title: 'Пора пополнить запас лекарства',
+      body: `${medicine.name}: ${formatStockDays(medicine) ?? 'запас скоро закончится'}.`,
+      channelId: getReminderChannelId(),
+      autoCancel: true,
+      schedule: { at, allowWhileIdle: true },
+      extra: { medicineId: medicine.id, refill: true },
+    }],
   })
-  addToCache(notificationId, medicine.id, 'refill', refillAt)
-  return notificationId
+  addToCache(id, medicine.id, 'refill', at)
+  return id
 }
 
-export const scheduleNotificationsForMedicine = async (
-  medicine: Medicine
-): Promise<number[]> => {
-  if (!isNativeNotificationsAvailable() || !medicine?.name) return []
-
-  const soundChoice = medicine.reminderSound ?? selectedSound() ?? defaultReminderSound
-  const volumeChoice = medicine.reminderVolume ?? selectedVolume() ?? defaultReminderVolume
-  const hasPermission = await requestNotificationPermission()
-  if (!hasPermission) return []
-  await ensureReminderChannel(soundChoice, volumeChoice)
+export const scheduleNotificationsForMedicine = async (medicine: Medicine): Promise<number[]> => {
+  if (!isNativeNotificationsAvailable() || !medicine.name || medicine.paused) return []
+  const sound = medicine.reminderSound ?? selectedSound() ?? defaultReminderSound
+  const volume = medicine.reminderVolume ?? selectedVolume() ?? defaultReminderVolume
+  if (!(await requestNotificationPermission())) return []
+  await ensureReminderChannel(sound, volume)
   await cancelAllNotificationsForMedicine(medicine.id)
 
   const ids: number[] = []
-  const refillId = await scheduleRefillNotification(medicine, soundChoice, volumeChoice).catch((error) => {
+  const refillId = await scheduleRefill(medicine).catch((error) => {
     console.error('Refill notification scheduling failed:', error)
     return null
   })
   if (refillId !== null) ids.push(refillId)
-
   if (medicine.frequency === 'as_needed') return ids
   if (medicine.endDate && new Date(medicine.endDate).getTime() < Date.now()) return ids
 
-  const times = medicine.customTimes && medicine.customTimes.length > 0
-    ? medicine.customTimes
-    : getTimesForScheduleType(medicine.scheduleType)
-
-  for (const time of times) {
-    const finiteCourse = Boolean(medicine.endDate)
-    if (medicine.frequency === 'every_other' || finiteCourse) {
+  for (const time of getMedicineTimes(medicine)) {
+    const finite = Boolean(medicine.endDate)
+    if (medicine.frequency === 'every_other' || finite) {
       const interval = medicine.frequency === 'every_other' ? 2 : 1
-      const occurrences = getOccurrences(medicine, time, interval, interval === 2 ? 184 : 366)
-      for (const occurrence of occurrences) {
-        const id = await scheduleOneTimeNotification(
-          medicine,
-          time,
-          occurrence,
-          soundChoice,
-          volumeChoice
-        )
-        if (id !== null) ids.push(id)
-      }
+      for (const at of occurrences(medicine, time, interval)) ids.push(await scheduleOnce(medicine, time, at, sound, volume))
     } else {
-      const id = await scheduleDailyNotification(
-        medicine,
-        time,
-        soundChoice,
-        volumeChoice
-      )
+      const id = await scheduleDaily(medicine, time, sound, volume)
       if (id !== null) ids.push(id)
     }
   }
-
   return ids
 }

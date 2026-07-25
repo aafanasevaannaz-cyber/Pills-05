@@ -1,72 +1,60 @@
 'use client'
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { findMedicineNameSuggestions, commonMedicineNames } from '@/data/medicineNames'
+import { findMedicineNameSuggestions } from '@/data/medicineNames'
 import { recordDiagnosticEvent } from '@/lib/diagnostics'
 
-type MedicineNameInputProps = {
+const normalize = (value: string) => value.trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е')
+
+function highlightedName(name: string, query: string): React.ReactNode {
+  const normalizedName = normalize(name)
+  const normalizedQuery = normalize(query)
+  const index = normalizedName.indexOf(normalizedQuery)
+  if (!normalizedQuery || index < 0) return name
+  return (
+    <>
+      {name.slice(0, index)}
+      <strong>{name.slice(index, index + query.trim().length)}</strong>
+      {name.slice(index + query.trim().length)}
+    </>
+  )
+}
+
+export const MedicineNameInput: React.FC<{
   value: string
   onChange: (value: string) => void
   existingNames?: string[]
   autoFocus?: boolean
-}
-
-const normalize = (value: string) =>
-  value.trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е')
-
-export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
-  value,
-  onChange,
-  existingNames = [],
-  autoFocus = false,
-}) => {
+}> = ({ value, onChange, existingNames = [], autoFocus = false }) => {
   const id = useId()
-  const [focused, setFocused] = useState(false)
-  const [composing, setComposing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const lastDiagnosticRef = useRef('')
-
+  const blurTimer = useRef<number | undefined>(undefined)
+  const [focused, setFocused] = useState(false)
   const suggestions = useMemo(() => {
     const current = normalize(value)
-    return findMedicineNameSuggestions(value, existingNames, 10)
+    return findMedicineNameSuggestions(value, existingNames, 7)
       .filter((suggestion) => normalize(suggestion) !== current)
+      .slice(0, 5)
   }, [existingNames, value])
-
-  const firstSuggestion = suggestions[0]
-  const open = value.trim().length > 0 && suggestions.length > 0
+  const open = focused && value.trim().length > 0 && suggestions.length > 0
 
   useEffect(() => {
-    const stateKey = [value.trim().length, suggestions.length, focused, composing].join(':')
-    if (stateKey === lastDiagnosticRef.current) return
-    lastDiagnosticRef.current = stateKey
-    const timer = window.setTimeout(() => {
-      recordDiagnosticEvent('autocomplete.state', {
-        valueLength: value.trim().length,
-        suggestionCount: suggestions.length,
-        focused,
-        composing,
-        inputVisible: Boolean(inputRef.current?.offsetParent),
-      })
-    }, 180)
-    return () => window.clearTimeout(timer)
-  }, [composing, focused, suggestions.length, value])
+    document.documentElement.dataset.autocompleteOpen = open ? 'true' : 'false'
+    return () => {
+      delete document.documentElement.dataset.autocompleteOpen
+    }
+  }, [open])
 
-  const choose = (suggestion: string, source: 'primary' | 'list' | 'keyboard' | 'native') => {
+  const choose = (suggestion: string) => {
+    if (blurTimer.current) window.clearTimeout(blurTimer.current)
     recordDiagnosticEvent('autocomplete.chosen', {
-      source,
       valueLengthBefore: value.trim().length,
       selectedLength: suggestion.length,
       suggestionCount: suggestions.length,
     })
     onChange(suggestion)
-    window.setTimeout(() => {
-      inputRef.current?.focus()
-      inputRef.current?.setSelectionRange(suggestion.length, suggestion.length)
-    }, 0)
-  }
-
-  const updateValue = (nextValue: string) => {
-    onChange(nextValue)
+    setFocused(false)
+    inputRef.current?.blur()
   }
 
   return (
@@ -77,7 +65,6 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
         id={id}
         className="ui-input medicine-autocomplete__input"
         value={value}
-        list={`${id}-native-names`}
         placeholder="Например: Нексиум"
         autoComplete="off"
         autoCorrect="off"
@@ -85,70 +72,31 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
         spellCheck={false}
         autoFocus={autoFocus}
         enterKeyHint="next"
-        aria-autocomplete="both"
+        aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={`${id}-suggestions`}
         onFocus={() => {
+          if (blurTimer.current) window.clearTimeout(blurTimer.current)
           setFocused(true)
           recordDiagnosticEvent('autocomplete.focus', { valueLength: value.trim().length })
         }}
         onBlur={() => {
-          setFocused(false)
-          recordDiagnosticEvent('autocomplete.blur', {
-            valueLength: value.trim().length,
-            suggestionCount: suggestions.length,
-          })
+          blurTimer.current = window.setTimeout(() => setFocused(false), 180)
         }}
-        onCompositionStart={() => setComposing(true)}
-        onCompositionEnd={(event) => {
-          setComposing(false)
-          updateValue(event.currentTarget.value)
-          recordDiagnosticEvent('autocomplete.compositionEnd', {
-            valueLength: event.currentTarget.value.trim().length,
-          })
-        }}
-        onInput={(event) => {
-          const nextValue = event.currentTarget.value
-          updateValue(nextValue)
-        }}
+        onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
-          if ((event.key === 'Tab' || event.key === 'ArrowRight') && firstSuggestion) {
+          if (event.key === 'Enter' && suggestions[0]) {
             event.preventDefault()
-            choose(firstSuggestion, 'keyboard')
+            choose(suggestions[0])
           }
+          if (event.key === 'Escape') setFocused(false)
         }}
       />
+      <p className="ui-help">Можно выбрать подсказку или написать любое название вручную.</p>
 
-      <datalist id={`${id}-native-names`}>
-        {commonMedicineNames.map((name) => <option value={name} key={name} />)}
-      </datalist>
-
-      {open && firstSuggestion ? (
-        <button
-          type="button"
-          className="medicine-autocomplete__complete"
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => choose(firstSuggestion, 'primary')}
-        >
-          <span>Нажмите, чтобы дописать</span>
-          <strong>{firstSuggestion}</strong>
-        </button>
-      ) : (
-        <p className="ui-help medicine-autocomplete__help">
-          После первой буквы здесь появится готовое название. Любое другое название можно написать вручную.
-        </p>
-      )}
-
-      {suggestions.length > 1 && (
-        <div
-          id={`${id}-suggestions`}
-          className="medicine-suggestions"
-          role="listbox"
-          aria-label="Подсказки названий"
-          aria-live="polite"
-        >
-          <p className="medicine-suggestions__title">Другие варианты</p>
-          {suggestions.slice(1, 6).map((suggestion) => (
+      {open && (
+        <div id={`${id}-suggestions`} className="medicine-suggestions" role="listbox" aria-label="Подсказки названий">
+          {suggestions.map((suggestion) => (
             <button
               type="button"
               className="medicine-suggestion"
@@ -156,9 +104,9 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
               aria-selected={false}
               key={suggestion}
               onPointerDown={(event) => event.preventDefault()}
-              onClick={() => choose(suggestion, 'list')}
+              onClick={() => choose(suggestion)}
             >
-              {suggestion}
+              {highlightedName(suggestion, value)}
             </button>
           ))}
         </div>

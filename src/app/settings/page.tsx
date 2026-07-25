@@ -22,7 +22,7 @@ type SettingsTab = 'main' | 'appearance' | 'data' | 'diagnostics'
 
 const tabs: Array<{ id: SettingsTab; title: string }> = [
   { id: 'main', title: 'Главное' },
-  { id: 'appearance', title: 'Вид' },
+  { id: 'appearance', title: 'Дизайн и текст' },
   { id: 'data', title: 'Данные' },
   { id: 'diagnostics', title: 'Ошибки' },
 ]

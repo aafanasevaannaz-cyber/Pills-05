@@ -82,10 +82,14 @@
   color: var(--primary-text);
 }
 
+.schedule-times {
+  gap: 12px;
+}
+
 .schedule-time-row {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--surface-soft);
@@ -123,15 +127,17 @@
 
 .schedule-number-input {
   min-width: 0;
+  min-height: 58px !important;
+  padding: 8px 10px !important;
   text-align: center;
-  font-size: 1.55rem;
+  font-size: 1.45rem;
   font-weight: 850;
   background: var(--surface) !important;
 }
 
 .schedule-time-colon {
-  padding-bottom: 10px;
-  font-size: 1.8rem;
+  padding-bottom: 8px;
+  font-size: 1.65rem;
   font-weight: 900;
 }
 
@@ -175,6 +181,17 @@
   box-shadow: 0 -8px 20px rgba(25, 26, 24, 0.08);
 }
 
+/* На длинном экране расписания липкая панель перекрывала поля времени.
+   Здесь действия идут обычным блоком после всех приёмов. */
+.add-step-card:has(.schedule-editor) .add-step-actions {
+  position: static;
+  bottom: auto;
+  margin: 18px 0 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 html[data-keyboard-open='true'] .add-step-actions {
   bottom: 8px;
 }
@@ -196,7 +213,7 @@ html[data-keyboard-open='true'] .add-step-actions {
   }
 
   .schedule-time-row {
-    padding: 13px;
+    padding: 12px;
   }
 }
 

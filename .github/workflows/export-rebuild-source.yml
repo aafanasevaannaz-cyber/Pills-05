@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - rebuild/po-chasam-2
+  pull_request:
+    branches:
+      - claude/setup-documentation-uVAKM
   workflow_dispatch:
 
 jobs:

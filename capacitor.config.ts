@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.moi.tabletki.reminder',
-  appName: 'Мои таблетки',
+  appId: 'com.chaipodusham.pochasam',
+  appName: 'По часам',
   webDir: 'out',
   plugins: {
     SystemBars: {

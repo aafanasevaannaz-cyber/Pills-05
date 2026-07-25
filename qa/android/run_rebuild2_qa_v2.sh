@@ -47,7 +47,7 @@ snapshot "02-frequency"
 '''
 new_continue = '''snapshot "01-name-keyboard"
 assert_not_text "${XML_DIR}/01-name-keyboard.xml" "Нажмите, чтобы дописать" "Осталась старая огромная карточка автодополнения"
-# Кнопка действия не должна прятаться за клавиатурой. Основной путь — синяя клавиша «Далее».
+# Основной путь — клавиша «Далее» на клавиатуре.
 adb_quick shell input keyevent KEYCODE_ENTER >/dev/null 2>&1 || true
 log_action "Нажата клавиша «Далее» на клавиатуре"
 sleep 3
@@ -57,11 +57,68 @@ if ! contains_text "${XML_DIR}/02-frequency.xml" "Как часто приним
   exit 1
 fi
 '''
-if old_navigation not in text:
-    raise SystemExit('QA navigation patch target was not found')
-if old_continue not in text:
-    raise SystemExit('QA keyboard continue patch target was not found')
-text = text.replace(old_navigation, new_navigation).replace(old_continue, new_continue)
+old_frequency = '''snapshot "02-frequency-selected"
+require_tap "Продолжить" "failure-frequency-continue" || exit 1
+sleep 2
+snapshot "03-time-count"
+'''
+new_frequency = '''snapshot "02-frequency-selected"
+if ! tap_from_last "Продолжить"; then
+  adb_quick shell input tap 735 1800 >/dev/null 2>&1 || true
+  log_action "Кнопка «Продолжить» нажата резервными координатами"
+fi
+sleep 3
+snapshot "03-time-count"
+if ! contains_text "${XML_DIR}/03-time-count.xml" "В какое время напомнить"; then
+  fail "Не открыт шаг времени"
+  exit 1
+fi
+'''
+old_times_continue = '''scroll_and_tap "Продолжить" "03-times-continue" 8 || exit 1
+sleep 2
+snapshot "04-sound-top"
+'''
+new_times_continue = '''if ! scroll_and_tap "Продолжить" "03-times-continue" 8; then
+  adb_quick shell input tap 735 1800 >/dev/null 2>&1 || true
+  log_action "Продолжение после времени нажато резервными координатами"
+fi
+sleep 3
+snapshot "04-sound-top"
+'''
+old_sound_continue = '''scroll_and_tap "Продолжить" "04-sound-continue" 12 || exit 1
+sleep 2
+snapshot "05-dose-default"
+'''
+new_sound_continue = '''if ! scroll_and_tap "Продолжить" "04-sound-continue" 12; then
+  adb_quick shell input tap 735 1800 >/dev/null 2>&1 || true
+  log_action "Продолжение после звука нажато резервными координатами"
+fi
+sleep 3
+snapshot "05-dose-default"
+'''
+old_save = '''scroll_and_tap "Сохранить" "05-save" 12 || exit 1
+sleep 5
+snapshot "06-medicine-saved"
+'''
+new_save = '''if ! scroll_and_tap "Сохранить" "05-save" 12; then
+  adb_quick shell input tap 735 1800 >/dev/null 2>&1 || true
+  log_action "Сохранение нажато резервными координатами"
+fi
+sleep 6
+snapshot "06-medicine-saved"
+'''
+replacements = [
+    (old_navigation, new_navigation, 'navigation'),
+    (old_continue, new_continue, 'keyboard continue'),
+    (old_frequency, new_frequency, 'frequency continue'),
+    (old_times_continue, new_times_continue, 'times continue'),
+    (old_sound_continue, new_sound_continue, 'sound continue'),
+    (old_save, new_save, 'save'),
+]
+for old, new, label in replacements:
+    if old not in text:
+        raise SystemExit(f'QA patch target was not found: {label}')
+    text = text.replace(old, new)
 path.write_text(text, encoding='utf-8')
 PY
 

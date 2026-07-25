@@ -66,6 +66,16 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
     inputRef.current?.blur()
   }
 
+  const submit = () => {
+    if (onSubmit) {
+      onSubmit()
+      return
+    }
+    const card = inputRef.current?.closest('.add-step-card')
+    const primaryAction = card?.querySelector<HTMLButtonElement>('.add-step-actions .ui-button--primary')
+    primaryAction?.click()
+  }
+
   return (
     <div className="ui-field medicine-autocomplete">
       <label className="ui-label" htmlFor={id}>Название</label>
@@ -103,7 +113,7 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
             if (value.trim()) {
               setFocused(false)
               inputRef.current?.blur()
-              onSubmit?.()
+              window.setTimeout(submit, 0)
             }
           }
           if (event.key === 'Escape') setFocused(false)

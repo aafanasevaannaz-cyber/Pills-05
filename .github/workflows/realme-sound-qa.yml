@@ -131,7 +131,7 @@ jobs:
 
       - name: Run full rebuild 2 scenario
         id: qa
-        if: steps.emulator.outcome == 'success'
+        if: steps.emulator.conclusion == 'success'
         continue-on-error: true
         run: |
           export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
@@ -139,7 +139,7 @@ jobs:
           bash qa/android/run_rebuild2_qa_v2.sh apk/app-debug.apk
 
       - name: Record emulator infrastructure failure
-        if: steps.qa.outcome == 'skipped'
+        if: steps.qa.conclusion == 'skipped'
         run: |
           RESULT_DIR="qa-results/realme-c55-android12-sound-fix"
           mkdir -p "${RESULT_DIR}/logs"
@@ -157,5 +157,5 @@ jobs:
           retention-days: 30
 
       - name: Fail after evidence upload
-        if: steps.qa.outcome != 'success'
+        if: steps.qa.conclusion != 'success'
         run: exit 1

@@ -1,5 +1,7 @@
 
 gzip: /tmp/rebuild2.patch.gz: invalid compressed data--crc error
-error: corrupt patch at /tmp/rebuild2.patch:4376
+
+gzip: /tmp/rebuild2.patch.gz: invalid compressed data--length error
+error: corrupt patch at /tmp/rebuild2.patch:3422
 
 decode=0 gzip=1 apply_check=128

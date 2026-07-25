@@ -184,7 +184,7 @@ export const AddMedicineScreen = () => {
         <div className="progress-fill" style={{ width: `${step * 20}%` }} />
       </div>
 
-      <Card className="ui-card--soft add-step-card">
+      <Card className={`ui-card--soft add-step-card add-step-card--step-${step}`}>
         {step === 1 && (
           <div className="page-stack">
             <div><h2 className="section-title">Как называется лекарство?</h2><p className="muted">Напишите первую букву и выберите вариант либо введите своё название.</p></div>

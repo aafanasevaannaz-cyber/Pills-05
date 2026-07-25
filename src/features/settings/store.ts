@@ -31,6 +31,8 @@ export type PersistedSettings = {
   customVoiceVolume: ReminderVolume
   customVoicePath: string
   voiceRate: VoiceRate
+  androidVoiceName: string
+  voicePitch: number
   pushNotificationsEnabled: boolean
 }
 
@@ -48,6 +50,8 @@ interface SettingsStore extends PersistedSettings {
   setCustomVoiceVolume: (volume: ReminderVolume) => void
   setCustomVoicePath: (path: string) => void
   setVoiceRate: (rate: VoiceRate) => void
+  setAndroidVoiceName: (name: string) => void
+  setVoicePitch: (pitch: number) => void
   setPushNotificationsEnabled: (enabled: boolean) => void
   replaceSettings: (settings: Partial<PersistedSettings>) => void
   saveToDB: () => void
@@ -70,12 +74,18 @@ const defaults: PersistedSettings = {
   customVoiceVolume: defaultVoiceVolume,
   customVoicePath: '',
   voiceRate: 'slow',
+  androidVoiceName: '',
+  voicePitch: 1,
   pushNotificationsEnabled: true,
 }
 
 const validThemes: Theme[] = ['light', 'dark', 'high-contrast']
 const validTextSizes: TextSize[] = ['small', 'medium', 'large', 'extra-large']
 const validFonts: Font[] = ['system', 'serif', 'mono']
+const safePitch = (value: unknown) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.max(0.7, Math.min(1.3, number)) : 1
+}
 
 function normalizeSettings(value: unknown): PersistedSettings {
   if (!value || typeof value !== 'object') return defaults
@@ -92,29 +102,25 @@ function normalizeSettings(value: unknown): PersistedSettings {
   const defaultVoiceMode = requestedMode === 'recorded' && !customVoicePath ? 'android' : requestedMode
 
   return {
-    theme: validThemes.includes(candidate.theme as Theme) ? (candidate.theme as Theme) : defaults.theme,
+    theme: validThemes.includes(candidate.theme as Theme) ? candidate.theme as Theme : defaults.theme,
     textSize: validTextSizes.includes(candidate.textSize as TextSize)
-      ? (candidate.textSize as TextSize)
+      ? candidate.textSize as TextSize
       : defaults.textSize,
-    font: validFonts.includes(legacyFont as Font) ? (legacyFont as Font) : 'system',
+    font: validFonts.includes(legacyFont as Font) ? legacyFont as Font : 'system',
     reduceAnimations: candidate.reduceAnimations === true,
     soundEnabled: candidate.soundEnabled !== false,
-    soundChoice: isReminderSound(candidate.soundChoice)
-      ? candidate.soundChoice
-      : defaultReminderSound,
-    volumeChoice: isReminderVolume(candidate.volumeChoice)
-      ? candidate.volumeChoice
-      : defaultReminderVolume,
+    soundChoice: isReminderSound(candidate.soundChoice) ? candidate.soundChoice : defaultReminderSound,
+    volumeChoice: isReminderVolume(candidate.volumeChoice) ? candidate.volumeChoice : defaultReminderVolume,
     voiceEnabled: defaultVoiceMode !== 'off',
     defaultVoiceMode,
-    voiceVolume: isReminderVolume(candidate.voiceVolume)
-      ? candidate.voiceVolume
-      : defaultVoiceVolume,
+    voiceVolume: isReminderVolume(candidate.voiceVolume) ? candidate.voiceVolume : defaultVoiceVolume,
     customVoiceVolume: isReminderVolume(candidate.customVoiceVolume)
       ? candidate.customVoiceVolume
       : defaultVoiceVolume,
     customVoicePath,
     voiceRate: isVoiceRate(candidate.voiceRate) ? candidate.voiceRate : defaults.voiceRate,
+    androidVoiceName: typeof candidate.androidVoiceName === 'string' ? candidate.androidVoiceName : '',
+    voicePitch: safePitch(candidate.voicePitch),
     pushNotificationsEnabled: candidate.pushNotificationsEnabled !== false,
   }
 }
@@ -134,6 +140,8 @@ function snapshot(state: PersistedSettings): PersistedSettings {
     customVoiceVolume: state.customVoiceVolume,
     customVoicePath: state.customVoicePath,
     voiceRate: state.voiceRate,
+    androidVoiceName: state.androidVoiceName,
+    voicePitch: state.voicePitch,
     pushNotificationsEnabled: state.pushNotificationsEnabled,
   }
 }
@@ -172,12 +180,17 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setCustomVoiceVolume: (customVoiceVolume) => update({ customVoiceVolume }),
     setCustomVoicePath: (customVoicePath) => update({
       customVoicePath,
-      defaultVoiceMode: customVoicePath ? get().defaultVoiceMode : get().defaultVoiceMode === 'recorded' ? 'android' : get().defaultVoiceMode,
-      voiceEnabled: customVoicePath ? get().voiceEnabled : get().defaultVoiceMode === 'recorded' ? true : get().voiceEnabled,
+      defaultVoiceMode: customVoicePath
+        ? get().defaultVoiceMode
+        : get().defaultVoiceMode === 'recorded' ? 'android' : get().defaultVoiceMode,
+      voiceEnabled: customVoicePath
+        ? get().voiceEnabled
+        : get().defaultVoiceMode === 'recorded' ? true : get().voiceEnabled,
     }),
     setVoiceRate: (voiceRate) => update({ voiceRate }),
-    setPushNotificationsEnabled: (pushNotificationsEnabled) =>
-      update({ pushNotificationsEnabled }),
+    setAndroidVoiceName: (androidVoiceName) => update({ androidVoiceName }),
+    setVoicePitch: (voicePitch) => update({ voicePitch: safePitch(voicePitch) }),
+    setPushNotificationsEnabled: (pushNotificationsEnabled) => update({ pushNotificationsEnabled }),
     replaceSettings: (settings) => update(normalizeSettings({ ...get(), ...settings })),
     saveToDB: () => persist(snapshot(get())),
     loadFromDB: () => {

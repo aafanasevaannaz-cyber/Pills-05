@@ -10,14 +10,15 @@ import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
 import android.util.Log;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -29,7 +30,11 @@ import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @CapacitorPlugin(
     name = "ReminderAudio",
@@ -41,6 +46,7 @@ public class ReminderAudioPlugin extends Plugin {
     private static final String TAG = "ReminderAudio";
     private MediaPlayer mediaPlayer;
     private TextToSpeech textToSpeech;
+    private ReminderSequencePlayer sequencePlayer;
     private MediaRecorder mediaRecorder;
     private File recordingFile;
     private long recordingStartedAt;
@@ -54,6 +60,23 @@ public class ReminderAudioPlugin extends Plugin {
 
     private float clampVolume(double value) {
         return (float) Math.max(0.05, Math.min(1, value));
+    }
+
+    private ReminderSequencePlayer sequencePlayer() {
+        if (sequencePlayer == null) sequencePlayer = new ReminderSequencePlayer(getContext());
+        return sequencePlayer;
+    }
+
+    private void selectVoice(TextToSpeech engine, String requestedName) {
+        if (requestedName == null || requestedName.trim().isEmpty()) return;
+        Set<Voice> voices = engine.getVoices();
+        if (voices == null) return;
+        for (Voice voice : voices) {
+            if (requestedName.equals(voice.getName())) {
+                engine.setVoice(voice);
+                return;
+            }
+        }
     }
 
     private void setAlarmStreamVolume(double requestedLevel) {
@@ -130,38 +153,99 @@ public class ReminderAudioPlugin extends Plugin {
     public void speak(PluginCall call) {
         String text = call.getString("text", "Пора принять лекарство");
         float rate = (float) Math.max(0.5, Math.min(1.2, call.getDouble("rate", 0.9)));
+        float pitch = (float) Math.max(0.7, Math.min(1.3, call.getDouble("pitch", 1.0)));
         float volume = clampVolume(call.getDouble("volume", 1.0));
+        String voiceName = call.getString("voiceName", "");
         setAlarmStreamVolume(call.getDouble("streamVolume", 1.0));
 
         stopSpeech();
         textToSpeech = new TextToSpeech(getContext(), status -> {
             if (status != TextToSpeech.SUCCESS || textToSpeech == null) {
-                Log.e(TAG, "TextToSpeech initialization failed: " + status);
                 call.reject("На устройстве недоступна голосовая озвучка");
                 return;
             }
-
             int languageResult = textToSpeech.setLanguage(new Locale("ru", "RU"));
             if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
                 languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.e(TAG, "Russian TextToSpeech voice is unavailable: " + languageResult);
                 stopSpeech();
                 call.reject("На устройстве не установлен русский голос Android");
                 return;
             }
-
+            selectVoice(textToSpeech, voiceName);
             textToSpeech.setSpeechRate(rate);
-            textToSpeech.setPitch(1.02f);
+            textToSpeech.setPitch(pitch);
             textToSpeech.setAudioAttributes(alarmAttributes(AudioAttributes.CONTENT_TYPE_SPEECH));
             Bundle parameters = new Bundle();
             parameters.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
             textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, parameters, "medicine-reminder-preview");
-            Log.i(TAG, "Russian alarm-stream voice started, rate=" + rate + ", volume=" + volume + ", text=" + text);
-
             JSObject result = new JSObject();
             result.put("speaking", true);
             call.resolve(result);
         });
+    }
+
+    @PluginMethod
+    public void listVoices(PluginCall call) {
+        final TextToSpeech[] holder = new TextToSpeech[1];
+        holder[0] = new TextToSpeech(getContext(), status -> {
+            TextToSpeech catalog = holder[0];
+            if (status != TextToSpeech.SUCCESS || catalog == null) {
+                call.reject("Не удалось получить список голосов Android");
+                return;
+            }
+            List<Voice> russian = new ArrayList<>();
+            Set<Voice> voices = catalog.getVoices();
+            if (voices != null) {
+                for (Voice voice : voices) {
+                    Locale locale = voice.getLocale();
+                    if (locale != null && "ru".equalsIgnoreCase(locale.getLanguage())) russian.add(voice);
+                }
+            }
+            russian.sort(Comparator
+                .comparing(Voice::isNetworkConnectionRequired)
+                .thenComparing(Voice::getName));
+            JSArray resultVoices = new JSArray();
+            int index = 1;
+            for (Voice voice : russian) {
+                JSObject item = new JSObject();
+                item.put("name", voice.getName());
+                item.put("label", "Русский голос " + index);
+                item.put("locale", voice.getLocale() == null ? "ru-RU" : voice.getLocale().toLanguageTag());
+                item.put("networkRequired", voice.isNetworkConnectionRequired());
+                resultVoices.put(item);
+                index += 1;
+            }
+            JSObject result = new JSObject();
+            result.put("voices", resultVoices);
+            call.resolve(result);
+            catalog.shutdown();
+            holder[0] = null;
+        });
+    }
+
+    @PluginMethod
+    public void playSequence(PluginCall call) {
+        ReminderSequencePlayer.Spec spec = new ReminderSequencePlayer.Spec();
+        spec.soundResource = call.getString("resource", "medicine_classic_maximum.wav");
+        spec.alarmVolume = clampVolume(call.getDouble("streamVolume", 1.0));
+        spec.text = call.getString("text", "Пора принять лекарство");
+        spec.rate = (float) Math.max(0.5, Math.min(1.2, call.getDouble("rate", 0.72)));
+        spec.pitch = (float) Math.max(0.7, Math.min(1.3, call.getDouble("pitch", 1.0)));
+        spec.voiceMode = call.getString("voiceMode", "android");
+        spec.voiceVolume = clampVolume(call.getDouble("voiceVolume", 1.0));
+        spec.voiceName = call.getString("voiceName", "");
+        spec.recordedVoicePath = call.getString("recordedVoicePath", "");
+        sequencePlayer().play(spec, new ReminderSequencePlayer.Listener() {
+            @Override public void onFinished() {
+                Log.i(TAG, "Preview sequence completed");
+            }
+            @Override public void onError(Exception error) {
+                Log.e(TAG, "Preview sequence failed", error);
+            }
+        });
+        JSObject result = new JSObject();
+        result.put("playing", true);
+        call.resolve(result);
     }
 
     @PluginMethod
@@ -320,25 +404,9 @@ public class ReminderAudioPlugin extends Plugin {
             call.resolve();
             return;
         }
-
-        String channelId = call.getString("channelId", "medicine-reminders-v8-alarm-maximum");
-        String channelName = call.getString("channelName", "Громкие напоминания о лекарствах");
-        String description = call.getString("description", "Напоминания о времени приёма лекарств");
-        String requestedResource = call.getString("resource", "medicine_alarm_maximum.wav");
-        String resourceName = requestedResource == null
-            ? "medicine_alarm_maximum"
-            : requestedResource.replace(".wav", "").replace(".mp3", "");
-
-        int resourceId = getContext().getResources().getIdentifier(
-            resourceName,
-            "raw",
-            getContext().getPackageName()
-        );
-        if (resourceId == 0) {
-            call.reject("Не найден сигнал для системного уведомления: " + resourceName);
-            return;
-        }
-
+        String channelId = call.getString("channelId", "medicine-reminders-v10-silent");
+        String channelName = call.getString("channelName", "Напоминания о лекарствах");
+        String description = call.getString("description", "Текст и вибрация; звук запускает приложение");
         try {
             NotificationManager manager = (NotificationManager) getContext()
                 .getSystemService(Context.NOTIFICATION_SERVICE);
@@ -353,20 +421,12 @@ public class ReminderAudioPlugin extends Plugin {
                 channel.enableVibration(true);
                 channel.setVibrationPattern(new long[] { 0, 450, 180, 450, 180, 650 });
                 channel.enableLights(true);
-                Uri soundUri = Uri.parse(
-                    "android.resource://" + getContext().getPackageName() + "/" + resourceId
-                );
-                channel.setSound(
-                    soundUri,
-                    alarmAttributes(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                );
+                channel.setSound(null, null);
                 manager.createNotificationChannel(channel);
-                Log.i(TAG, "Created alarm-stream notification channel=" + channelId);
             }
             call.resolve();
         } catch (Exception error) {
-            Log.e(TAG, "Could not create alarm notification channel=" + channelId, error);
-            call.reject("Не удалось создать громкий канал уведомлений", error);
+            call.reject("Не удалось создать канал уведомлений", error);
         }
     }
 
@@ -376,19 +436,20 @@ public class ReminderAudioPlugin extends Plugin {
         String medicineId = call.getString("medicineId", "");
         long triggerAt = Math.round(call.getDouble("triggerAt", (double) System.currentTimeMillis()));
         int repeatDays = call.getInt("repeatDays", 0);
+        String soundResource = call.getString("soundResource", "medicine_classic_maximum.wav");
         String text = call.getString("text", "Пора принять лекарство");
         float rate = (float) Math.max(0.5, Math.min(1.2, call.getDouble("rate", 0.72)));
+        float pitch = (float) Math.max(0.7, Math.min(1.3, call.getDouble("pitch", 1.0)));
         String voiceMode = call.getString("voiceMode", "android");
         float voiceVolume = clampVolume(call.getDouble("voiceVolume", 1.0));
         float alarmVolume = clampVolume(call.getDouble("alarmVolume", 1.0));
-        int delayBeforeVoiceMs = Math.max(0, call.getInt("delayBeforeVoiceMs", 4000));
+        String voiceName = call.getString("voiceName", "");
         String recordedVoicePath = call.getString("recordedVoicePath", "");
 
         if (requestCode <= 0) {
             call.reject("Неверные параметры напоминания");
             return;
         }
-
         if ("recorded".equals(voiceMode)) {
             try {
                 File recorded = validatedVoiceFile(recordedVoicePath);
@@ -402,22 +463,17 @@ public class ReminderAudioPlugin extends Plugin {
 
         try {
             ReminderVoiceAlarmReceiver.schedule(
-                getContext(),
-                requestCode,
-                medicineId == null ? "" : medicineId,
-                triggerAt,
-                Math.max(0, repeatDays),
-                text == null ? "" : text,
-                rate,
+                getContext(), requestCode, medicineId == null ? "" : medicineId,
+                triggerAt, Math.max(0, repeatDays),
+                soundResource == null ? "" : soundResource,
+                text == null ? "" : text, rate, pitch,
                 voiceMode == null ? "android" : voiceMode,
-                voiceVolume,
-                alarmVolume,
-                delayBeforeVoiceMs,
+                voiceVolume, alarmVolume,
+                voiceName == null ? "" : voiceName,
                 recordedVoicePath == null ? "" : recordedVoicePath
             );
             call.resolve();
         } catch (Exception error) {
-            Log.e(TAG, "Could not schedule background reminder audio", error);
             call.reject("Не удалось запланировать звуковое напоминание", error);
         }
     }
@@ -450,15 +506,16 @@ public class ReminderAudioPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
+        if (sequencePlayer != null) sequencePlayer.stop();
         stopPlayer();
         stopSpeech();
-        Log.i(TAG, "Native reminder preview stopped");
+        Log.i(TAG, "Native reminder audio stopped");
         call.resolve();
     }
 
     @PluginMethod
     public void openNotificationChannelSettings(PluginCall call) {
-        String channelId = call.getString("channelId", "medicine-reminders-v8-alarm-maximum");
+        String channelId = call.getString("channelId", "medicine-reminders-v10-silent");
         try {
             Intent intent;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -532,6 +589,7 @@ public class ReminderAudioPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        if (sequencePlayer != null) sequencePlayer.stop();
         stopPlayer();
         stopSpeech();
         cancelRecorder(true);

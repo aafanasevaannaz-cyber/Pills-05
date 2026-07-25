@@ -146,8 +146,8 @@ export async function buildDiagnosticReport(): Promise<string> {
     : null
 
   return [
-    'МОИ ТАБЛЕТКИ — ДИАГНОСТИЧЕСКИЙ ОТЧЁТ',
-    'Версия: 1.8-dim-diagnostics',
+    'ПО ЧАСАМ 2 — ДИАГНОСТИЧЕСКИЙ ОТЧЁТ',
+    'Версия: 2.0-rebuild',
     `Создан: ${new Date().toISOString()}`,
     `Платформа: ${Capacitor.getPlatform()}`,
     `User-Agent: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'нет'}`,

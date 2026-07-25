@@ -12,8 +12,8 @@ const scheduleLabels: Record<Medicine['scheduleType'], string> = {
   afternoon: 'Днём, 14:00',
   evening: 'Вечером, 20:00',
   night: 'На ночь, 22:00',
-  twice: 'Утром и вечером',
-  three_times: '3 раза в день',
+  twice: '08:00 и 20:00',
+  three_times: '08:00, 14:00 и 20:00',
   custom: 'По выбранному времени',
 }
 
@@ -25,6 +25,7 @@ const frequencyLabels: Record<Medicine['frequency'], string> = {
 
 export function formatDosage(value: string): string {
   const normalized = value.trim()
+  if (!normalized) return '1 таблетка'
   return dosageLabels[normalized] ?? normalized.replace(/_/g, ' ')
 }
 
@@ -33,15 +34,14 @@ export function formatFrequency(value: Medicine['frequency']): string {
 }
 
 export function formatSchedule(medicine: Medicine): string {
-  if (medicine.customTimes && medicine.customTimes.length > 0) {
-    return medicine.customTimes.join(', ')
-  }
+  const times = getMedicineTimes(medicine)
+  if (times.length > 0) return times.join(', ')
   return scheduleLabels[medicine.scheduleType]
 }
 
 export function getMedicineTimes(medicine: Medicine): string[] {
   if (medicine.customTimes && medicine.customTimes.length > 0) {
-    return medicine.customTimes
+    return Array.from(new Set(medicine.customTimes)).sort()
   }
 
   const times: Record<Medicine['scheduleType'], string[]> = {

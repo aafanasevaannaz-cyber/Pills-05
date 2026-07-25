@@ -2,14 +2,21 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { AndroidVoicePicker } from '@/components/ui/AndroidVoicePicker'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { VolumeSlider } from '@/components/ui/VolumeSlider'
-import { useSettingsStore } from '@/features/settings/store'
 import { useMedicinesStore } from '@/features/medicines/store'
+import {
+  ensureReminderChannel,
+  isNativeNotificationsAvailable,
+  scheduleTestNotification,
+} from '@/features/reminders/nativeNotifications.logic'
 import { useRemindersStore } from '@/features/reminders/store'
+import { useSettingsStore } from '@/features/settings/store'
 import {
   cancelCustomVoiceRecording,
+  listAndroidVoices,
   openAndroidReminderSoundSettings,
   previewCustomVoice,
   previewFullReminder,
@@ -17,8 +24,9 @@ import {
   previewReminderVoice,
   startCustomVoiceRecording,
   stopCustomVoiceRecording,
-  stopReminderPreview,
+  type AndroidVoiceOption,
 } from '@/features/sound/nativeAudio'
+import { stopAllReminderAudio } from '@/features/sound/stopAllAudio'
 import {
   reminderSoundOptions,
   type ReminderSound,
@@ -26,19 +34,15 @@ import {
   type VoiceMode,
   type VoiceRate,
 } from '@/features/sound/options'
-import {
-  ensureReminderChannel,
-  isNativeNotificationsAvailable,
-  scheduleTestNotification,
-} from '@/features/reminders/nativeNotifications.logic'
 
-const sampleMedicine = 'Зенон'
+const sampleMedicine = 'по расписанию'
 const sampleDosage = '1 таблетка'
 
 export default function SoundSettingsPage() {
   const settings = useSettingsStore()
   const medicines = useMedicinesStore((state) => state.medicines)
-  const syncReminderForMedicine = useRemindersStore((state) => state.syncReminderForMedicine)
+  const syncReminder = useRemindersStore((state) => state.syncReminderForMedicine)
+  const [voices, setVoices] = useState<AndroidVoiceOption[]>([])
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -49,8 +53,9 @@ export default function SoundSettingsPage() {
   useEffect(() => {
     useSettingsStore.getState().loadFromDB()
     useMedicinesStore.getState().loadFromDB()
+    void listAndroidVoices().then(setVoices)
     return () => {
-      void stopReminderPreview()
+      void stopAllReminderAudio()
       if (recordingRef.current) void cancelCustomVoiceRecording()
     }
   }, [])
@@ -74,80 +79,26 @@ export default function SoundSettingsPage() {
       setStatus(success)
     } catch (error) {
       console.error('Sound settings action failed:', error)
-      setStatus(error instanceof Error ? error.message : 'Не удалось выполнить проверку звука.')
+      setStatus(error instanceof Error ? error.message : 'Не удалось выполнить проверку.')
     } finally {
       setBusy(false)
     }
   }
 
-  const rescheduleExisting = async () => {
-    for (const medicine of medicines) {
-      await syncReminderForMedicine(medicine).catch((error) => {
-        console.error(`Reminder reschedule failed for ${medicine.id}:`, error)
-      })
-    }
-  }
-
-  const changeSound = async (soundChoice: ReminderSound) => {
-    settings.setSoundChoice(soundChoice)
+  const changeSound = async (sound: ReminderSound) => {
+    settings.setSoundChoice(sound)
     settings.setSoundEnabled(true)
-    setBusy(true)
-    setStatus('Сохраняем сигнал…')
-    try {
-      await ensureReminderChannel(soundChoice, settings.volumeChoice)
-      await previewReminderSound(soundChoice, settings.volumeChoice)
-      setStatus('Сигнал выбран как стандартный для новых лекарств.')
-    } catch (error) {
-      console.error('Sound choice update failed:', error)
-      setStatus('Сигнал сохранён, но воспроизвести пример не удалось.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const changeVolume = (volumeChoice: ReminderVolume) => {
-    settings.setVolumeChoice(volumeChoice)
-    settings.setSoundEnabled(true)
-    void ensureReminderChannel(settings.soundChoice, volumeChoice).catch((error) => {
-      console.error('Default alarm channel update failed:', error)
+    await stopAllReminderAudio()
+    await previewReminderSound(sound, settings.volumeChoice).catch((error) => {
+      console.error('Sound preview failed:', error)
+      setStatus('Сигнал выбран, но воспроизвести его не удалось.')
     })
   }
 
-  const startSharedRecording = async () => {
-    if (recording || busy) return
-    setStatus('')
-    try {
-      await stopReminderPreview()
-      await startCustomVoiceRecording(recordingKey.current)
-      setRecording(true)
-      setStatus('Запись идёт. Произнесите общую фразу и нажмите «Остановить и сохранить».')
-    } catch (error) {
-      console.error('Shared voice recording start failed:', error)
-      setStatus('Не удалось начать запись. Разрешите приложению доступ к микрофону.')
-    }
-  }
-
-  const stopSharedRecording = async () => {
-    if (!recording) return
-    try {
-      const result = await stopCustomVoiceRecording()
-      setRecording(false)
-      settings.setCustomVoicePath(result.path)
-      settings.setDefaultVoiceMode('recorded')
-      const seconds = Math.max(1, Math.round(result.durationMs / 1000))
-      setStatus(`Общая запись сохранена: ${seconds} сек. Её можно выбирать для новых лекарств.`)
-    } catch (error) {
-      console.error('Shared voice recording stop failed:', error)
-      setRecording(false)
-      await cancelCustomVoiceRecording()
-      setStatus('Запись не сохранилась. Произнесите фразу не короче одной секунды.')
-    }
-  }
-
-  const removeSharedVoice = () => {
-    settings.setCustomVoicePath('')
-    settings.setDefaultVoiceMode('android')
-    setStatus('Общая запись убрана из настроек. Уже сохранённые лекарства не изменены.')
+  const changeVolume = (volume: ReminderVolume) => {
+    settings.setVolumeChoice(volume)
+    settings.setSoundEnabled(true)
+    void ensureReminderChannel(settings.soundChoice, volume)
   }
 
   const selectVoiceMode = (mode: VoiceMode) => {
@@ -156,109 +107,109 @@ export default function SoundSettingsPage() {
       return
     }
     settings.setDefaultVoiceMode(mode)
-    setStatus(mode === 'off'
-      ? 'Для новых лекарств голос будет выключен.'
-      : mode === 'recorded'
-        ? 'Для новых лекарств выбрана общая запись.'
-        : 'Для новых лекарств выбран русский голос Android.')
   }
 
-  const testNotification = async () => {
-    await run(async () => {
-      const scheduled = await scheduleTestNotification(
-        settings.soundChoice,
-        settings.volumeChoice,
-        {
-          voiceMode: settings.defaultVoiceMode,
-          voiceVolume: settings.voiceVolume,
-          customVoiceVolume: settings.customVoiceVolume,
-          customVoicePath: settings.customVoicePath,
-          voiceRate: settings.voiceRate,
-        }
-      )
-      if (!scheduled) {
-        throw new Error('Android открыл разрешение на точные напоминания. Включите его, вернитесь и нажмите проверку ещё раз.')
-      }
-    }, 'Через 3 секунды придёт системное уведомление с выбранным сигналом и голосом.')
+  const startRecording = async () => {
+    try {
+      await stopAllReminderAudio()
+      await startCustomVoiceRecording(recordingKey.current)
+      setRecording(true)
+      setStatus('Запись идёт. Произнесите фразу и нажмите «Остановить и сохранить».')
+    } catch (error) {
+      console.error('Shared recording start failed:', error)
+      setStatus('Не удалось начать запись. Разрешите доступ к микрофону.')
+    }
   }
 
-  const openAndroidSettings = async () => {
-    await run(async () => {
-      await ensureReminderChannel(settings.soundChoice, settings.volumeChoice)
-      const opened = await openAndroidReminderSoundSettings(
-        settings.soundChoice,
-        settings.volumeChoice
-      )
-      if (!opened) throw new Error('Системные настройки доступны только в Android-приложении.')
-    }, 'Открыты системные настройки канала уведомлений.')
+  const finishRecording = async () => {
+    try {
+      const result = await stopCustomVoiceRecording()
+      setRecording(false)
+      settings.setCustomVoicePath(result.path)
+      settings.setDefaultVoiceMode('recorded')
+      setStatus(`Общая запись сохранена: ${Math.max(1, Math.round(result.durationMs / 1000))} сек.`)
+    } catch (error) {
+      console.error('Shared recording stop failed:', error)
+      setRecording(false)
+      await cancelCustomVoiceRecording()
+      setStatus('Запись не сохранилась. Запишите фразу не короче секунды.')
+    }
   }
+
+  const previewAll = () => run(
+    () => previewFullReminder({
+      sound: settings.soundChoice,
+      volume: settings.volumeChoice,
+      voiceMode: settings.defaultVoiceMode,
+      voiceVolume: settings.defaultVoiceMode === 'recorded' ? settings.customVoiceVolume : settings.voiceVolume,
+      voiceRate: settings.voiceRate,
+      voicePitch: settings.voicePitch,
+      androidVoiceName: settings.androidVoiceName,
+      customVoicePath: settings.customVoicePath,
+      medicineName: sampleMedicine,
+      dosage: sampleDosage,
+    }),
+    'Пример запущен. Голос начинается сразу после фактического окончания сигнала.'
+  )
+
+  const testNotification = () => run(async () => {
+    const scheduled = await scheduleTestNotification(settings.soundChoice, settings.volumeChoice, {
+      voiceMode: settings.defaultVoiceMode,
+      voiceVolume: settings.voiceVolume,
+      customVoiceVolume: settings.customVoiceVolume,
+      customVoicePath: settings.customVoicePath,
+      voiceRate: settings.voiceRate,
+      voicePitch: settings.voicePitch,
+      androidVoiceName: settings.androidVoiceName,
+    })
+    if (!scheduled) throw new Error('Включите точные напоминания Android и повторите проверку.')
+  }, 'Через 4 секунды придёт нейтральное тестовое напоминание.')
+
+  const reschedule = () => run(async () => {
+    for (const medicine of medicines) {
+      if (!medicine.paused) await syncReminder(medicine)
+    }
+  }, 'Будущие напоминания обновлены.')
 
   return (
     <div className="app-page sound-page">
       <header className="app-header">
         <div>
-          <h1 className="app-title">Звук и общий голос</h1>
-          <p className="app-subtitle">Стандартные настройки, которые подставляются в новое лекарство</p>
+          <h1 className="app-title">Звук и голос</h1>
+          <p className="app-subtitle">Общие настройки для новых лекарств</p>
         </div>
         <Link href="/settings" className="ui-button ui-button--secondary">Назад</Link>
       </header>
 
       <div className="page-stack">
         <Card className="sound-preview-card ui-card--warning">
-          <p className="reminder-kicker">ПРИМЕР НАПОМИНАНИЯ</p>
-          <h2 className="sound-preview-name">{sampleMedicine}</h2>
-          <p className="sound-preview-dose">Дозировка: {sampleDosage}</p>
-          <Button
-            variant="primary"
-            className="ui-button--full sound-main-preview"
-            disabled={busy || recording || (settings.defaultVoiceMode === 'recorded' && !settings.customVoicePath)}
-            onClick={() => void run(
-              () => previewFullReminder({
-                sound: settings.soundChoice,
-                volume: settings.volumeChoice,
-                voiceEnabled: settings.defaultVoiceMode !== 'off',
-                voiceMode: settings.defaultVoiceMode,
-                voiceVolume: settings.voiceVolume,
-                customVoiceVolume: settings.customVoiceVolume,
-                customVoicePath: settings.customVoicePath,
-                voiceRate: settings.voiceRate,
-                medicineName: sampleMedicine,
-                dosage: sampleDosage,
-              }),
-              'Пример напоминания воспроизведён.'
-            )}
-          >
-            ▶ Послушать всё напоминание
+          <p className="reminder-kicker">ТЕСТОВОЕ НАПОМИНАНИЕ</p>
+          <h2 className="sound-preview-name">Пора принять лекарство</h2>
+          <Button variant="primary" className="ui-button--full" disabled={busy || recording} onClick={() => void previewAll()}>
+            ▶ Послушать сигнал и голос
           </Button>
-          <Button variant="quiet" className="ui-button--full" onClick={() => void stopReminderPreview()}>
-            Остановить звук
+          <Button variant="secondary" className="ui-button--full" onClick={() => void stopAllReminderAudio()}>
+            ■ Остановить всё
           </Button>
         </Card>
 
         <Card>
-          <h2 className="section-title">Выберите сигнал</h2>
-          <p className="muted">Нажмите на вариант — он сразу прозвучит.</p>
+          <h2 className="section-title">Сигнал</h2>
+          <p className="muted">Варианты отличаются ритмом и тембром, а не только высотой писка.</p>
           <div className="sound-option-grid" role="radiogroup" aria-label="Сигнал напоминания">
             {reminderSoundOptions.map((option) => (
               <button
                 type="button"
-                key={option.id}
                 role="radio"
                 aria-checked={settings.soundChoice === option.id}
                 className={`sound-option${settings.soundChoice === option.id ? ' is-selected' : ''}`}
                 disabled={busy || recording}
+                key={option.id}
                 onClick={() => void changeSound(option.id)}
               >
-                <span className="sound-option__icon" aria-hidden="true">
-                  {option.id === 'gentle' ? '♪' : option.id === 'alarm' ? '⏰' : '🔔'}
-                </span>
-                <span className="sound-option__text">
-                  <strong>{option.title}</strong>
-                  <span>{option.description}</span>
-                </span>
-                <span className="sound-option__check" aria-hidden="true">
-                  {settings.soundChoice === option.id ? '✓' : '▶'}
-                </span>
+                <span className="sound-option__icon" aria-hidden="true">{option.id === 'marimba' ? '▦' : option.id === 'digital' ? '◫' : option.id === 'alarm' ? '⏰' : '♪'}</span>
+                <span className="sound-option__text"><strong>{option.title}</strong><span>{option.description}</span></span>
+                <span className="sound-option__check" aria-hidden="true">{settings.soundChoice === option.id ? '✓' : '▶'}</span>
               </button>
             ))}
           </div>
@@ -270,145 +221,93 @@ export default function SoundSettingsPage() {
             label="Громкость сигнала"
             value={settings.volumeChoice}
             onChange={changeVolume}
-            onPreview={(next) => previewReminderSound(settings.soundChoice, next)}
-            help="Эта громкость будет предложена для каждого нового лекарства."
+            onPreview={(volume) => previewReminderSound(settings.soundChoice, volume)}
           />
         </Card>
 
         <Card>
-          <h2 className="section-title">Что говорить после сигнала</h2>
-          <div className="choice-grid" role="radiogroup" aria-label="Общий голос для новых лекарств">
+          <h2 className="section-title">После сигнала</h2>
+          <div className="choice-grid" role="radiogroup" aria-label="Голос по умолчанию">
             {[
-              { id: 'android', title: 'Русский голос Android', description: 'Назовёт лекарство и дозировку' },
-              { id: 'recorded', title: 'Моя общая запись', description: settings.customVoicePath ? 'Использовать сохранённую фразу' : 'Сначала запишите фразу ниже' },
+              { id: 'android', title: 'Голос Android', description: 'Назовёт лекарство и дозировку' },
+              { id: 'recorded', title: 'Моя запись', description: settings.customVoicePath ? 'Использовать сохранённую фразу' : 'Сначала записать фразу' },
               { id: 'off', title: 'Без голоса', description: 'Только сигнал и вибрация' },
             ].map((option) => (
               <label className={`choice${settings.defaultVoiceMode === option.id ? ' is-selected' : ''}`} key={option.id}>
-                <input
-                  type="radio"
-                  name="default-voice-mode"
-                  checked={settings.defaultVoiceMode === option.id}
-                  onChange={() => selectVoiceMode(option.id as VoiceMode)}
-                />
-                <span className="choice__text">
-                  <span className="choice__title">{option.title}</span>
-                  <span className="choice__description">{option.description}</span>
-                </span>
+                <input type="radio" checked={settings.defaultVoiceMode === option.id} onChange={() => selectVoiceMode(option.id as VoiceMode)} />
+                <span className="choice__text"><strong>{option.title}</strong><span className="choice__description">{option.description}</span></span>
               </label>
             ))}
           </div>
         </Card>
 
-        <Card>
-          <h2 className="section-title">Русский голос Android</h2>
+        <Card className="page-stack">
+          <h2 className="section-title">Голос Android</h2>
+          <AndroidVoicePicker voices={voices} value={settings.androidVoiceName} onChange={settings.setAndroidVoiceName} />
           <VolumeSlider
             id="default-android-voice-volume"
-            label="Громкость русского голоса"
+            label="Громкость голоса"
             value={settings.voiceVolume}
             onChange={settings.setVoiceVolume}
-            onPreview={(next) => previewReminderVoice(sampleMedicine, sampleDosage, settings.voiceRate, next)}
+            onPreview={(volume) => previewReminderVoice(sampleMedicine, sampleDosage, settings.voiceRate, volume, settings.androidVoiceName, settings.voicePitch)}
           />
           <div className="choice-grid" role="radiogroup" aria-label="Скорость голоса">
             {[
-              { id: 'slow', title: 'Медленно и отчётливо', description: 'Удобнее для пожилого человека' },
-              { id: 'normal', title: 'Обычная скорость', description: 'Быстрее произносит напоминание' },
+              { id: 'slow', title: 'Медленно и отчётливо' },
+              { id: 'normal', title: 'Обычная скорость' },
             ].map((option) => (
               <label className={`choice${settings.voiceRate === option.id ? ' is-selected' : ''}`} key={option.id}>
-                <input
-                  type="radio"
-                  name="voice-rate"
-                  checked={settings.voiceRate === option.id}
-                  onChange={() => settings.setVoiceRate(option.id as VoiceRate)}
-                />
-                <span className="choice__text">
-                  <span className="choice__title">{option.title}</span>
-                  <span className="choice__description">{option.description}</span>
-                </span>
+                <input type="radio" checked={settings.voiceRate === option.id} onChange={() => settings.setVoiceRate(option.id as VoiceRate)} />
+                <span className="choice__text"><strong>{option.title}</strong></span>
               </label>
             ))}
           </div>
+          <label className="ui-field">
+            <span className="ui-label">Высота голоса</span>
+            <input type="range" min="0.8" max="1.2" step="0.1" value={settings.voicePitch} onChange={(event) => settings.setVoicePitch(Number(event.target.value))} />
+          </label>
         </Card>
 
-        <Card>
+        <Card className="page-stack">
           <h2 className="section-title">Общая запись своим голосом</h2>
-          <p className="muted">Например: «Пора принять лекарство. Проверьте название на экране».</p>
           <VolumeSlider
             id="default-recorded-voice-volume"
-            label="Громкость общей записи"
+            label="Громкость записи"
             value={settings.customVoiceVolume}
             onChange={settings.setCustomVoiceVolume}
             disabled={recording}
-            onPreview={settings.customVoicePath
-              ? (next) => previewCustomVoice(settings.customVoicePath, next)
-              : undefined}
-            previewHint={settings.customVoicePath
-              ? 'Двигайте бегунок — общая запись прозвучит сразу.'
-              : 'Сначала запишите общую фразу.'}
+            onPreview={settings.customVoicePath ? (volume) => previewCustomVoice(settings.customVoicePath, volume) : undefined}
           />
           {recording ? (
-            <div className="page-stack">
-              <div className="status-strip status-strip--danger" role="status">● Запись идёт: {recordingSeconds} сек.</div>
-              <Button variant="primary" className="ui-button--full" onClick={() => void stopSharedRecording()}>
-                ■ Остановить и сохранить
-              </Button>
-            </div>
+            <>
+              <div className="status-strip status-strip--danger">● Запись идёт: {recordingSeconds} сек.</div>
+              <Button variant="primary" onClick={() => void finishRecording()}>■ Остановить и сохранить</Button>
+            </>
           ) : settings.customVoicePath ? (
-            <div className="page-stack">
-              <div className="status-strip status-strip--success" role="status">✓ Общая запись сохранена</div>
-              <Button variant="secondary" className="ui-button--full" disabled={busy} onClick={() => void run(
-                () => previewCustomVoice(settings.customVoicePath, settings.customVoiceVolume),
-                'Общая запись воспроизведена.'
-              )}>
-                ▶ Послушать общую запись
-              </Button>
-              <Button variant="secondary" className="ui-button--full" disabled={busy} onClick={() => void startSharedRecording()}>
-                🎙 Записать новую общую фразу
-              </Button>
-              <Button variant="quiet" className="ui-button--full" disabled={busy} onClick={removeSharedVoice}>
-                Не предлагать эту запись новым лекарствам
-              </Button>
-            </div>
+            <>
+              <div className="status-strip status-strip--success">✓ Общая запись сохранена</div>
+              <Button variant="secondary" onClick={() => void previewCustomVoice(settings.customVoicePath, settings.customVoiceVolume)}>▶ Послушать</Button>
+              <Button variant="secondary" onClick={() => void startRecording()}>🎙 Записать новую</Button>
+              <Button variant="quiet" onClick={() => { settings.setCustomVoicePath(''); settings.setDefaultVoiceMode('android') }}>Убрать запись</Button>
+            </>
           ) : (
-            <Button variant="primary" className="ui-button--full" disabled={busy} onClick={() => void startSharedRecording()}>
-              🎙 Записать общую фразу
-            </Button>
+            <Button variant="primary" onClick={() => void startRecording()}>🎙 Записать общую фразу</Button>
           )}
         </Card>
 
-        <Card>
-          <h2 className="section-title">Системное уведомление Android</h2>
-          <p className="muted">Эта проверка показывает сигнал и выбранный голос при свёрнутом приложении.</p>
-          <div className="page-stack">
-            <label className={`choice${settings.pushNotificationsEnabled ? ' is-selected' : ''}`}>
-              <input
-                type="checkbox"
-                checked={settings.pushNotificationsEnabled}
-                onChange={(event) => settings.setPushNotificationsEnabled(event.target.checked)}
-              />
-              <span className="choice__text">
-                <span className="choice__title">Уведомления включены</span>
-                <span className="choice__description">Показывать напоминания при закрытом приложении</span>
-              </span>
-            </label>
-            <Button variant="primary" className="ui-button--full" disabled={busy || recording} onClick={() => void testNotification()}>
-              🔔 Проверить через 3 секунды
-            </Button>
-            {isNativeNotificationsAvailable() && (
-              <Button variant="secondary" className="ui-button--full" disabled={busy || recording} onClick={() => void openAndroidSettings()}>
-                Открыть системные настройки этого сигнала
-              </Button>
-            )}
-            <Button variant="quiet" className="ui-button--full" disabled={busy || recording} onClick={() => void run(rescheduleExisting, 'Существующие лекарства перепланированы с их сохранёнными настройками.')}>
-              Обновить будущие напоминания
-            </Button>
-          </div>
+        <Card className="page-stack">
+          <h2 className="section-title">Проверка при закрытом приложении</h2>
+          <Button variant="primary" disabled={busy || recording} onClick={() => void testNotification()}>🔔 Проверить через 4 секунды</Button>
+          {isNativeNotificationsAvailable() && (
+            <Button variant="secondary" disabled={busy} onClick={() => void run(async () => {
+              await ensureReminderChannel(settings.soundChoice, settings.volumeChoice)
+              await openAndroidReminderSoundSettings(settings.soundChoice, settings.volumeChoice)
+            }, 'Открыты настройки уведомлений Android.')}>Открыть настройки уведомлений</Button>
+          )}
+          <Button variant="quiet" disabled={busy} onClick={() => void reschedule()}>Обновить будущие напоминания</Button>
         </Card>
 
-        {status && (
-          <div className={`status-strip${status.startsWith('Не удалось') || status.startsWith('Android открыл') ? ' status-strip--warning' : ''}`} role="status">
-            {status}
-          </div>
-        )}
+        {status && <div className="status-strip" role="status">{status}</div>}
       </div>
     </div>
   )

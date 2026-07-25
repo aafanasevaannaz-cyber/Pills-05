@@ -1,0 +1,222 @@
+/* Пересобранные экраны: спокойные переходы, непрозрачные списки и компактное расписание. */
+
+:root {
+  --rebuild-motion: 240ms;
+}
+
+.app-page,
+.ui-card,
+.choice,
+.sound-option,
+.ui-button,
+.medicine-suggestion {
+  transition:
+    background-color var(--rebuild-motion) ease,
+    border-color var(--rebuild-motion) ease,
+    color var(--rebuild-motion) ease,
+    opacity var(--rebuild-motion) ease,
+    box-shadow var(--rebuild-motion) ease;
+}
+
+.ui-button:active,
+.choice:active,
+.sound-option:active,
+.medicine-suggestion:active {
+  transform: none !important;
+}
+
+.add-step-card {
+  overflow: visible;
+}
+
+.medicine-autocomplete__input,
+.medicine-suggestions,
+.medicine-suggestion {
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.medicine-suggestions {
+  background: var(--surface) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 18px 42px rgba(28, 30, 27, 0.34) !important;
+}
+
+.medicine-suggestion {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+.medicine-suggestion:hover,
+.medicine-suggestion:focus-visible,
+.medicine-suggestion:active {
+  background: var(--surface-strong) !important;
+}
+
+.schedule-editor {
+  width: 100%;
+}
+
+.schedule-count-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.schedule-count {
+  min-height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.schedule-count.is-selected,
+.schedule-minute-shortcuts button.is-selected,
+.dosage-shortcuts button.is-selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.schedule-times {
+  gap: 12px;
+}
+
+.schedule-time-row {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.schedule-time-row__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.schedule-time-remove {
+  border: 0;
+  background: transparent;
+  color: var(--danger);
+  font-weight: 750;
+  padding: 8px;
+}
+
+.schedule-time-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.schedule-time-inputs label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.schedule-number-input {
+  min-width: 0;
+  min-height: 58px !important;
+  padding: 8px 10px !important;
+  text-align: center;
+  font-size: 1.45rem;
+  font-weight: 850;
+  background: var(--surface) !important;
+}
+
+.schedule-time-colon {
+  padding-bottom: 8px;
+  font-size: 1.65rem;
+  font-weight: 900;
+}
+
+.schedule-minute-shortcuts,
+.dosage-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.schedule-minute-shortcuts button,
+.dosage-shortcuts button {
+  min-height: 44px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 750;
+}
+
+.stock-fields {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.medicine-sound-editor .sound-option-grid {
+  grid-template-columns: 1fr;
+}
+
+.add-step-actions {
+  position: sticky;
+  z-index: 40;
+  bottom: calc(78px + var(--safe-bottom));
+  padding: 10px;
+  margin: 8px -10px -10px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 -8px 20px rgba(25, 26, 24, 0.08);
+}
+
+/* На длинном экране расписания липкая панель перекрывала поля времени.
+   Здесь действия идут обычным блоком после всех приёмов. */
+.add-step-card--step-3 .add-step-actions {
+  position: static;
+  bottom: auto;
+  margin: 18px 0 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-keyboard-open='true'] .add-step-actions {
+  bottom: 8px;
+}
+
+@media (min-width: 620px) {
+  .medicine-sound-editor .sound-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-times {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .schedule-minute-shortcuts,
+  .dosage-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-time-row {
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --rebuild-motion: 0ms; }
+}

@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.moi.tabletki.reminder',
-  appName: 'Мои таблетки',
+  appId: 'com.chaipodusham.pochasam.rebuild2',
+  appName: 'По часам 2',
   webDir: 'out',
   plugins: {
     SystemBars: {
@@ -13,7 +13,6 @@ const config: CapacitorConfig = {
     },
     LocalNotifications: {
       iconColor: '#2F6B4F',
-      sound: 'medicine_alarm.wav',
     },
   },
 }

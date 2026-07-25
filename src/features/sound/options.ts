@@ -1,4 +1,4 @@
-export type ReminderSound = 'gentle' | 'clear' | 'alarm'
+export type ReminderSound = 'gentle' | 'bell' | 'marimba' | 'digital' | 'classic' | 'alarm'
 export type ReminderVolume = 'normal' | 'loud' | 'maximum'
 export type VoiceRate = 'slow' | 'normal'
 export type VoiceMode = 'android' | 'recorded' | 'off'
@@ -20,21 +20,39 @@ export type ReminderVolumeOption = {
 export const reminderSoundOptions: ReminderSoundOption[] = [
   {
     id: 'gentle',
-    title: 'Мягкий звонок',
-    description: 'Спокойный трёхтональный сигнал',
-    previewDelayMs: 2550,
+    title: 'Мягкая мелодия',
+    description: 'Три спокойные ноты без резкого писка',
+    previewDelayMs: 2300,
   },
   {
-    id: 'clear',
-    title: 'Чёткий сигнал',
-    description: 'Хорошо различимая последовательность',
-    previewDelayMs: 2550,
+    id: 'bell',
+    title: 'Колокольчик',
+    description: 'Один ясный звон с длинным затуханием',
+    previewDelayMs: 1800,
+  },
+  {
+    id: 'marimba',
+    title: 'Маримба',
+    description: 'Низкие деревянные удары',
+    previewDelayMs: 1700,
+  },
+  {
+    id: 'digital',
+    title: 'Цифровой двойной',
+    description: 'Короткий электронный сигнал из двух импульсов',
+    previewDelayMs: 1450,
+  },
+  {
+    id: 'classic',
+    title: 'Классический будильник',
+    description: 'Чередующиеся высокие и низкие тоны',
+    previewDelayMs: 2750,
   },
   {
     id: 'alarm',
-    title: 'Громкий будильник',
-    description: 'Самый заметный вариант для другой комнаты',
-    previewDelayMs: 3550,
+    title: 'Очень заметный',
+    description: 'Длинный громкий сигнал для другой комнаты',
+    previewDelayMs: 3600,
   },
 ]
 
@@ -59,12 +77,13 @@ export const reminderVolumeOptions: ReminderVolumeOption[] = [
   },
 ]
 
-export const defaultReminderSound: ReminderSound = 'alarm'
+export const defaultReminderSound: ReminderSound = 'classic'
 export const defaultReminderVolume: ReminderVolume = 'maximum'
 export const defaultVoiceVolume: ReminderVolume = 'maximum'
 
 export function isReminderSound(value: unknown): value is ReminderSound {
-  return value === 'gentle' || value === 'clear' || value === 'alarm'
+  return value === 'gentle' || value === 'bell' || value === 'marimba' ||
+    value === 'digital' || value === 'classic' || value === 'alarm'
 }
 
 export function isReminderVolume(value: unknown): value is ReminderVolume {
@@ -76,7 +95,7 @@ export function isVoiceMode(value: unknown): value is VoiceMode {
 }
 
 export function getReminderSoundOption(sound: ReminderSound): ReminderSoundOption {
-  return reminderSoundOptions.find((option) => option.id === sound) ?? reminderSoundOptions[2]
+  return reminderSoundOptions.find((option) => option.id === sound) ?? reminderSoundOptions[4]
 }
 
 export function getReminderVolumeOption(volume: ReminderVolume): ReminderVolumeOption {
@@ -91,12 +110,12 @@ export function getReminderWebUrl(sound: ReminderSound, volume: ReminderVolume):
   return `/sounds/${getReminderResource(sound, volume)}`
 }
 
-export function getReminderChannelId(sound: ReminderSound, volume: ReminderVolume): string {
-  return `medicine-reminders-v8-${sound}-${volume}`
+export function getReminderChannelId(): string {
+  return 'medicine-reminders-v10-silent'
 }
 
 export function getVoiceRateValue(rate: VoiceRate): number {
-  return rate === 'slow' ? 0.72 : 0.9
+  return rate === 'slow' ? 0.72 : 0.92
 }
 
 export function isVoiceRate(value: unknown): value is VoiceRate {

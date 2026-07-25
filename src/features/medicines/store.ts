@@ -13,9 +13,9 @@ import {
 
 interface MedicinesStore {
   medicines: Medicine[]
-  addMedicine: (medicine: Medicine) => void
+  addMedicine: (medicine: Medicine) => Medicine
   removeMedicine: (id: string) => void
-  updateMedicine: (id: string, updates: Partial<Medicine>) => void
+  updateMedicine: (id: string, updates: Partial<Medicine>) => Medicine | null
   consumeStock: (id: string) => Medicine | null
   getMedicine: (id: string) => Medicine | null
   findByName: (name: string) => Medicine | null
@@ -38,6 +38,21 @@ const nonNegativeNumber = (value: unknown): number | undefined => {
   return Number.isFinite(number) && number >= 0 ? number : undefined
 }
 
+const safePitch = (value: unknown) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.max(0.7, Math.min(1.3, number)) : 1
+}
+
+const normalizeTimes = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined
+  const times = Array.from(new Set(value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => /^([01]\d|2[0-3]):[0-5]\d$/.test(item))))
+    .sort()
+  return times.length > 0 ? times : undefined
+}
+
 const reviveMedicine = (medicine: Medicine): Medicine => {
   const voiceMode = isVoiceMode(medicine.voiceMode)
     ? medicine.voiceMode
@@ -46,7 +61,6 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
       : medicine.customVoicePath
         ? 'recorded'
         : 'android'
-
   const androidVoiceVolume = isReminderVolume(medicine.voiceVolume)
     ? medicine.voiceVolume
     : defaultVoiceVolume
@@ -56,7 +70,9 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
 
   return {
     ...medicine,
-    dosage: formatDosage(String(medicine.dosage ?? '')),
+    dosage: formatDosage(String(medicine.dosage ?? '1 таблетка')),
+    customTimes: normalizeTimes(medicine.customTimes),
+    paused: medicine.paused === true,
     reminderSound: isReminderSound(medicine.reminderSound)
       ? medicine.reminderSound
       : defaultReminderSound,
@@ -68,9 +84,9 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
     voiceVolume: voiceMode === 'recorded' ? customVoiceVolume : androidVoiceVolume,
     customVoiceVolume,
     voiceRate: isVoiceRate(medicine.voiceRate) ? medicine.voiceRate : 'slow',
-    customVoicePath: typeof medicine.customVoicePath === 'string'
-      ? medicine.customVoicePath
-      : '',
+    androidVoiceName: typeof medicine.androidVoiceName === 'string' ? medicine.androidVoiceName : '',
+    voicePitch: safePitch(medicine.voicePitch),
+    customVoicePath: typeof medicine.customVoicePath === 'string' ? medicine.customVoicePath : '',
     createdAt: new Date(medicine.createdAt),
     endDate: medicine.endDate ? new Date(medicine.endDate) : undefined,
     stockQuantity: nonNegativeNumber(medicine.stockQuantity),
@@ -83,28 +99,35 @@ const reviveMedicine = (medicine: Medicine): Medicine => {
 export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
   medicines: [],
 
-  addMedicine: (medicine) =>
+  addMedicine: (medicine) => {
+    const revived = reviveMedicine(medicine)
     set((state) => {
-      const medicines = [...state.medicines, reviveMedicine(medicine)]
+      const medicines = [...state.medicines, revived]
       persistMedicines(medicines)
       return { medicines }
-    }),
+    })
+    return revived
+  },
 
-  removeMedicine: (id) =>
-    set((state) => {
-      const medicines = state.medicines.filter((medicine) => medicine.id !== id)
-      persistMedicines(medicines)
-      return { medicines }
-    }),
+  removeMedicine: (id) => set((state) => {
+    const medicines = state.medicines.filter((medicine) => medicine.id !== id)
+    persistMedicines(medicines)
+    return { medicines }
+  }),
 
-  updateMedicine: (id, updates) =>
+  updateMedicine: (id, updates) => {
+    let result: Medicine | null = null
     set((state) => {
-      const medicines = state.medicines.map((medicine) =>
-        medicine.id === id ? reviveMedicine({ ...medicine, ...updates }) : medicine
-      )
+      const medicines = state.medicines.map((medicine) => {
+        if (medicine.id !== id) return medicine
+        result = reviveMedicine({ ...medicine, ...updates })
+        return result
+      })
       persistMedicines(medicines)
       return { medicines }
-    }),
+    })
+    return result
+  },
 
   consumeStock: (id) => {
     let result: Medicine | null = null
@@ -131,31 +154,24 @@ export const useMedicinesStore = create<MedicinesStore>((set, get) => ({
   findByName: (name) => {
     const normalized = name.toLowerCase().trim()
     if (!normalized) return null
-    return (
-      get().medicines.find((medicine) =>
-        medicine.name.toLowerCase().includes(normalized)
-      ) || null
-    )
+    return get().medicines.find((medicine) => medicine.name.toLowerCase().includes(normalized)) || null
   },
 
   saveToDB: () => persistMedicines(get().medicines),
 
   loadFromDB: () => {
     if (typeof window === 'undefined') return
-
     try {
       const data = localStorage.getItem('medicines')
       if (!data) {
         set({ medicines: [] })
         return
       }
-
       const parsed = JSON.parse(data)
       if (!Array.isArray(parsed)) {
         set({ medicines: [] })
         return
       }
-
       const medicines = parsed.map(reviveMedicine)
       set({ medicines })
       persistMedicines(medicines)

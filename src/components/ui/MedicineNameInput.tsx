@@ -20,12 +20,21 @@ function highlightedName(name: string, query: string): React.ReactNode {
   )
 }
 
-export const MedicineNameInput: React.FC<{
+interface MedicineNameInputProps {
   value: string
   onChange: (value: string) => void
+  onSubmit?: () => void
   existingNames?: string[]
   autoFocus?: boolean
-}> = ({ value, onChange, existingNames = [], autoFocus = false }) => {
+}
+
+export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
+  value,
+  onChange,
+  onSubmit,
+  existingNames = [],
+  autoFocus = false,
+}) => {
   const id = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimer = useRef<number | undefined>(undefined)
@@ -85,9 +94,17 @@ export const MedicineNameInput: React.FC<{
         }}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && suggestions[0]) {
+          if (event.key === 'Enter') {
             event.preventDefault()
-            choose(suggestions[0])
+            if (suggestions[0]) {
+              choose(suggestions[0])
+              return
+            }
+            if (value.trim()) {
+              setFocused(false)
+              inputRef.current?.blur()
+              onSubmit?.()
+            }
           }
           if (event.key === 'Escape') setFocused(false)
         }}

@@ -60,6 +60,7 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
             <button
               type="button"
               className={`schedule-count${safeTimes.length === count ? ' is-selected' : ''}`}
+              aria-label={`${count} ${count === 1 ? 'раз' : 'раза'} в день`}
               aria-pressed={safeTimes.length === count}
               key={count}
               onClick={() => setCount(count)}
@@ -87,6 +88,7 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
                 <label>
                   <span>Часы</span>
                   <input
+                    aria-label={`Часы приёма ${index + 1}`}
                     className="ui-input schedule-number-input"
                     type="number"
                     inputMode="numeric"
@@ -100,21 +102,23 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
                 <label>
                   <span>Минуты</span>
                   <input
+                    aria-label={`Минуты приёма ${index + 1}`}
                     className="ui-input schedule-number-input"
                     type="number"
                     inputMode="numeric"
                     min={0}
                     max={59}
                     value={minutes}
-                    onChange={(event) => replace(index, normalizeTime(hours, Number(event.target.value)))}
+                    onChange={(event) => replace(index, normalizeTime(hours, Number(event.target.value))}
                   />
                 </label>
               </div>
-              <div className="schedule-minute-shortcuts" aria-label="Быстрый выбор минут">
+              <div className="schedule-minute-shortcuts" aria-label={`Быстрый выбор минут приёма ${index + 1}`}>
                 {[0, 15, 30, 45].map((minute) => (
                   <button
                     type="button"
                     className={minutes === minute ? 'is-selected' : ''}
+                    aria-label={`Приём ${index + 1}, минуты ${twoDigits(minute)}`}
                     aria-pressed={minutes === minute}
                     key={minute}
                     onClick={() => replace(index, normalizeTime(hours, minute))}

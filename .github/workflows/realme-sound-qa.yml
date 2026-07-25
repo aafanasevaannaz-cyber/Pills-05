@@ -139,7 +139,7 @@ jobs:
           bash qa/android/run_rebuild2_qa_v2.sh apk/app-debug.apk
 
       - name: Record emulator infrastructure failure
-        if: steps.emulator.outcome != 'success'
+        if: steps.qa.outcome == 'skipped'
         run: |
           RESULT_DIR="qa-results/realme-c55-android12-sound-fix"
           mkdir -p "${RESULT_DIR}/logs"
@@ -157,5 +157,5 @@ jobs:
           retention-days: 30
 
       - name: Fail after evidence upload
-        if: steps.emulator.outcome != 'success' || steps.qa.outcome == 'failure'
+        if: steps.qa.outcome != 'success'
         run: exit 1

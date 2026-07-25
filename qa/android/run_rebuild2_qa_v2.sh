@@ -74,6 +74,50 @@ if ! contains_text "${XML_DIR}/03-time-count.xml" "В какое время на
   exit 1
 fi
 '''
+old_find_edit = '''find_and_tap_edit() {
+  local label="$1"
+  local prefix="$2"
+  local rounds="${3:-8}"
+  local round coords
+  for ((round=0; round<=rounds; round+=1)); do
+    coords="$(coords_from_last "$label" 0)"
+    if [[ -n "$coords" ]]; then
+      tap_coords "$coords" "$label"
+      LAST_XML=""
+      return 0
+    fi
+    adb_quick shell input swipe 540 1900 540 760 330 >/dev/null 2>&1 || true
+    snapshot "${prefix}-scroll-${round}"
+  done
+  fail "Не найдено поле «${label}»"
+  return 1
+}
+'''
+new_find_edit = '''find_and_tap_edit() {
+  local label="$1"
+  local prefix="$2"
+  local rounds="${3:-8}"
+  local round coords
+  # После изменения количества строк WebView иногда сохраняет прокрутку на втором приёме.
+  # Всегда начинаем поиск поля сверху, затем движемся вниз.
+  for round in 1 2 3 4; do
+    adb_quick shell input swipe 540 760 540 1900 280 >/dev/null 2>&1 || true
+  done
+  snapshot "${prefix}-top"
+  for ((round=0; round<=rounds; round+=1)); do
+    coords="$(coords_from_last "$label" 0)"
+    if [[ -n "$coords" ]]; then
+      tap_coords "$coords" "$label"
+      LAST_XML=""
+      return 0
+    fi
+    adb_quick shell input swipe 540 1900 540 760 330 >/dev/null 2>&1 || true
+    snapshot "${prefix}-scroll-${round}"
+  done
+  fail "Не найдено поле «${label}»"
+  return 1
+}
+'''
 old_times_continue = '''scroll_and_tap "Продолжить" "03-times-continue" 8 || exit 1
 sleep 2
 snapshot "04-sound-top"
@@ -111,6 +155,7 @@ replacements = [
     (old_navigation, new_navigation, 'navigation'),
     (old_continue, new_continue, 'keyboard continue'),
     (old_frequency, new_frequency, 'frequency continue'),
+    (old_find_edit, new_find_edit, 'find editable time'),
     (old_times_continue, new_times_continue, 'times continue'),
     (old_sound_continue, new_sound_continue, 'sound continue'),
     (old_save, new_save, 'save'),

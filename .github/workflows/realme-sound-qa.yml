@@ -129,14 +129,14 @@ jobs:
           "${ADB}" shell input keyevent 82 || true
           echo "Эмулятор Android 12 загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
 
-      - name: Run focused realme volume and custom voice scenario
+      - name: Run full rebuild 2 scenario
         id: qa
         if: steps.emulator.outcome == 'success'
         continue-on-error: true
         run: |
           export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-          chmod +x qa/android/run_realme_custom_voice_qa.sh qa/android/ui_pick.py
-          bash qa/android/run_realme_custom_voice_qa.sh apk/app-debug.apk
+          chmod +x qa/android/run_rebuild2_qa.sh qa/android/ui_pick.py
+          bash qa/android/run_rebuild2_qa.sh apk/app-debug.apk
 
       - name: Record emulator infrastructure failure
         if: steps.emulator.outcome != 'success'

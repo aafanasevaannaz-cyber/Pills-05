@@ -183,7 +183,7 @@
 
 /* На длинном экране расписания липкая панель перекрывала поля времени.
    Здесь действия идут обычным блоком после всех приёмов. */
-.add-step-card:has(.schedule-editor) .add-step-actions {
+.add-step-card--step-3 .add-step-actions {
   position: static;
   bottom: auto;
   margin: 18px 0 0;

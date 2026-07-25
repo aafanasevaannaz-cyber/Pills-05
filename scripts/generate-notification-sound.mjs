@@ -8,6 +8,7 @@ const sampleRate = 44_100
 const soundDefinitions = [
   {
     id: 'gentle',
+    kind: 'tone',
     durationSeconds: 2.5,
     baseAmplitude: 0.62,
     bursts: [
@@ -17,7 +18,43 @@ const soundDefinitions = [
     ],
   },
   {
+    id: 'chime',
+    kind: 'chime',
+    durationSeconds: 1.8,
+    baseAmplitude: 0.67,
+    bursts: [
+      { start: 0.0, duration: 0.72, frequency: 659.25 },
+      { start: 0.46, duration: 0.72, frequency: 783.99 },
+      { start: 0.92, duration: 0.82, frequency: 987.77 },
+    ],
+  },
+  {
+    id: 'wood',
+    kind: 'wood',
+    durationSeconds: 1.45,
+    baseAmplitude: 0.8,
+    bursts: [
+      { start: 0.0, duration: 0.2, frequency: 220 },
+      { start: 0.34, duration: 0.2, frequency: 180 },
+      { start: 0.68, duration: 0.2, frequency: 240 },
+      { start: 1.02, duration: 0.24, frequency: 200 },
+    ],
+  },
+  {
+    id: 'pulse',
+    kind: 'pulse',
+    durationSeconds: 2.1,
+    baseAmplitude: 0.72,
+    bursts: [
+      { start: 0.0, duration: 0.34, frequency: 392 },
+      { start: 0.48, duration: 0.34, frequency: 523.25 },
+      { start: 0.96, duration: 0.34, frequency: 440 },
+      { start: 1.44, duration: 0.38, frequency: 587.33 },
+    ],
+  },
+  {
     id: 'clear',
+    kind: 'tone',
     durationSeconds: 2.5,
     baseAmplitude: 0.78,
     bursts: [
@@ -29,6 +66,7 @@ const soundDefinitions = [
   },
   {
     id: 'alarm',
+    kind: 'tone',
     durationSeconds: 3.5,
     baseAmplitude: 0.96,
     bursts: [
@@ -48,25 +86,63 @@ const volumeDefinitions = [
   { id: 'maximum', multiplier: 1, drive: 2.35 },
 ]
 
-function createWave({ durationSeconds, baseAmplitude, bursts }, volume) {
-  const sampleCount = Math.floor(sampleRate * durationSeconds)
+function deterministicNoise(index) {
+  const value = Math.sin(index * 12.9898 + 78.233) * 43758.5453
+  return (value - Math.floor(value)) * 2 - 1
+}
+
+function burstSample(definition, burst, localTime, sampleIndex) {
+  if (localTime < 0 || localTime > burst.duration) return 0
+
+  if (definition.kind === 'chime') {
+    const attack = Math.min(1, localTime / 0.012)
+    const envelope = attack * Math.exp(-localTime / 0.28)
+    return envelope * (
+      Math.sin(2 * Math.PI * burst.frequency * localTime) * 0.62 +
+      Math.sin(2 * Math.PI * burst.frequency * 1.5 * localTime) * 0.23 +
+      Math.sin(2 * Math.PI * burst.frequency * 2.01 * localTime) * 0.12
+    )
+  }
+
+  if (definition.kind === 'wood') {
+    const envelope = Math.exp(-localTime / 0.045)
+    return envelope * (
+      Math.sin(2 * Math.PI * burst.frequency * localTime) * 0.72 +
+      Math.sin(2 * Math.PI * burst.frequency * 2.3 * localTime) * 0.17 +
+      deterministicNoise(sampleIndex) * 0.18
+    )
+  }
+
+  if (definition.kind === 'pulse') {
+    const phase = Math.max(0, Math.min(1, localTime / burst.duration))
+    const envelope = Math.sin(Math.PI * phase) ** 2
+    return envelope * (
+      Math.sin(2 * Math.PI * burst.frequency * localTime) * 0.84 +
+      Math.sin(2 * Math.PI * burst.frequency * 0.5 * localTime) * 0.16
+    )
+  }
+
+  const attack = Math.min(1, localTime / 0.018)
+  const release = Math.min(1, (burst.duration - localTime) / 0.11)
+  const envelope = Math.max(0, Math.min(attack, release))
+  const fundamental = Math.sin(2 * Math.PI * burst.frequency * localTime)
+  const second = Math.sin(2 * Math.PI * burst.frequency * 2 * localTime) * 0.32
+  const third = Math.sin(2 * Math.PI * burst.frequency * 3 * localTime) * 0.16
+  return (fundamental + second + third) * envelope
+}
+
+function createWave(definition, volume) {
+  const sampleCount = Math.floor(sampleRate * definition.durationSeconds)
   const samples = new Int16Array(sampleCount)
 
   for (let index = 0; index < sampleCount; index += 1) {
     const time = index / sampleRate
     let value = 0
 
-    for (const burst of bursts) {
-      const localTime = time - burst.start
-      if (localTime < 0 || localTime > burst.duration) continue
-
-      const attack = Math.min(1, localTime / 0.018)
-      const release = Math.min(1, (burst.duration - localTime) / 0.11)
-      const envelope = Math.max(0, Math.min(attack, release))
-      const fundamental = Math.sin(2 * Math.PI * burst.frequency * localTime)
-      const second = Math.sin(2 * Math.PI * burst.frequency * 2 * localTime) * 0.32
-      const third = Math.sin(2 * Math.PI * burst.frequency * 3 * localTime) * 0.16
-      value += (fundamental + second + third) * envelope * baseAmplitude * volume.multiplier
+    for (const burst of definition.bursts) {
+      value += burstSample(definition, burst, time - burst.start, index)
+        * definition.baseAmplitude
+        * volume.multiplier
     }
 
     const compressed = Math.tanh(value * volume.drive) / Math.tanh(volume.drive)

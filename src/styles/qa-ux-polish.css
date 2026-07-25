@@ -1,0 +1,78 @@
+.global-back-button {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+
+.progress-track + .ui-card .form-actions {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+
+.settings-tabs {
+  background: var(--app-bg);
+  background: color-mix(in srgb, var(--app-bg) 93%, transparent);
+}
+
+/* Шесть вариантов курса занимают три строки, а не шесть длинных карточек. */
+.optional-card > .choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.optional-card > .choice-grid .choice {
+  padding: 10px;
+  min-height: 54px;
+}
+
+.optional-card > .choice-grid .choice__description {
+  font-size: 0.78rem;
+}
+
+/* На телефоне кнопки шага стоят рядом и не перекрывают половину экрана. */
+@media (max-width: 719px) {
+  .progress-track + .ui-card .form-actions {
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    gap: 8px;
+  }
+
+  .progress-track + .ui-card .form-actions .ui-button {
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  /* Класс добавляется компонентом, потому что старые Android WebView не поддерживают :has(). */
+  .progress-track + .ui-card .button-choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .progress-track + .ui-card .button-choice-grid > .choice {
+    min-height: 88px;
+    padding: 10px;
+  }
+
+  .progress-track + .ui-card .button-choice-grid .choice__description {
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  /* Ручной выбор времени всегда виден первым и не прячется после семи карточек. */
+  .progress-track + .ui-card .button-choice-grid > .custom-time-choice {
+    order: -1;
+    grid-column: 1 / -1;
+    min-height: 72px;
+    border-color: var(--primary);
+    background: var(--surface-soft);
+  }
+}
+
+@media (max-width: 360px) {
+  .optional-card > .choice-grid,
+  .progress-track + .ui-card .button-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-track + .ui-card .button-choice-grid > .custom-time-choice {
+    grid-column: auto;
+  }
+}

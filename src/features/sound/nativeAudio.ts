@@ -61,6 +61,7 @@ interface ReminderAudioPlugin {
 }
 
 const NativeReminderAudio = registerPlugin<ReminderAudioPlugin>('ReminderAudio')
+let previewGeneration = 0
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
@@ -162,12 +163,18 @@ export async function previewFullReminder(options: {
   dosage: string
 }): Promise<void> {
   await stopReminderPreview()
+  const generation = previewGeneration
   await previewReminderSound(options.sound, options.volume)
 
   const voiceMode = options.voiceMode ?? (options.voiceEnabled === false ? 'off' : 'android')
   if (voiceMode === 'off' || typeof window === 'undefined') return
 
   await wait(getReminderSoundOption(options.sound).previewDelayMs)
+  if (generation !== previewGeneration) {
+    console.info('Delayed reminder voice cancelled before start', { generation, previewGeneration })
+    return
+  }
+
   if (voiceMode === 'recorded') {
     if (!options.customVoicePath) throw new Error('Сначала запишите свой голос')
     await previewCustomVoice(
@@ -245,6 +252,7 @@ export async function cancelAllNativeVoiceAlarms(): Promise<void> {
 }
 
 export async function stopReminderPreview(): Promise<void> {
+  previewGeneration += 1
   stopSound()
   stopSpeaking()
   if (Capacitor.isNativePlatform()) {

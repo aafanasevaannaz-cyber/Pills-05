@@ -19,8 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReminderVoiceService extends Service {
     private static final String TAG = "ReminderVoiceService";
-    private static final String CHANNEL_ID = "medicine-sequence-service-v1";
-    private static final String ACTION_STOP = "com.chaipodusham.pochasam.rebuild2.STOP_AUDIO";
+    private static final String CHANNEL_ID = "medicine-sequence-service-v2-rebuild3";
+    private static final String ACTION_STOP = "com.chaipodusham.pochasam.rebuild3.STOP_AUDIO";
     private static final int FOREGROUND_NOTIFICATION_ID = 719204;
     private static final AtomicInteger GENERATION = new AtomicInteger(0);
     private static WeakReference<ReminderVoiceService> activeService = new WeakReference<>(null);
@@ -131,10 +131,10 @@ public class ReminderVoiceService extends Service {
         if (manager == null || manager.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
-            "Активное напоминание",
+            "Идёт напоминание",
             NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Показывается, пока звучит напоминание");
+        channel.setDescription("Показывается только пока звучат сигнал и голос");
         channel.setSound(null, null);
         channel.enableVibration(false);
         manager.createNotificationChannel(channel);
@@ -149,11 +149,12 @@ public class ReminderVoiceService extends Service {
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Пора принять лекарство")
+            .setContentTitle("Напоминание о лекарстве")
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSilent(true)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .addAction(0, "Остановить", stopPendingIntent)
             .build();
     }

@@ -60,19 +60,19 @@ export const reminderVolumeOptions: ReminderVolumeOption[] = [
   {
     id: 'normal',
     title: 'Обычная',
-    description: 'Около половины громкости будильника',
+    description: 'Не меняет громкость будильника телефона; сигнал звучит мягче',
     gain: 0.55,
   },
   {
     id: 'loud',
     title: 'Громкая',
-    description: 'Около 80% громкости будильника',
+    description: 'При необходимости временно поднимает громкость будильника до 80%',
     gain: 0.8,
   },
   {
     id: 'maximum',
     title: 'Максимальная',
-    description: 'Полная громкость будильника Android',
+    description: 'На время напоминания использует полную громкость будильника',
     gain: 1,
   },
 ]
@@ -111,7 +111,7 @@ export function getReminderWebUrl(sound: ReminderSound, volume: ReminderVolume):
 }
 
 export function getReminderChannelId(): string {
-  return 'medicine-reminders-v10-silent'
+  return 'medicine-reminders-v11-rebuild3-silent'
 }
 
 export function getVoiceRateValue(rate: VoiceRate): number {

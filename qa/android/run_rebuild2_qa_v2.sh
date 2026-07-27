@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SOURCE="qa/android/run_rebuild2_qa.sh"
-RUNTIME="/tmp/run_rebuild2_qa_runtime.sh"
+RUNTIME="/tmp/run_rebuild3_qa_runtime.sh"
 cp "$SOURCE" "$RUNTIME"
 
 python3 - "$RUNTIME" <<'PY'
@@ -11,6 +11,15 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding='utf-8')
+text = text.replace('com.chaipodusham.pochasam.rebuild2', 'com.chaipodusham.pochasam.rebuild3')
+text = text.replace('По часам 2', 'По часам 3')
+text = text.replace('medicine-reminders-v10-silent', 'medicine-reminders-v11-rebuild3-silent')
+text = text.replace(
+    '''grep -F "draft.dosage.trim() || '1 таблетка'" src/components/screens/AddMedicineScreen.tsx >/dev/null || fail "Нет дозировки по умолчанию"''',
+    '''grep -F 'medicineForm: draft.medicineForm' src/components/screens/AddMedicineScreen.tsx >/dev/null || fail "Форма лекарства не сохраняется"
+grep -F 'getDefaultDosageForForm' src/components/screens/AddMedicineScreen.tsx >/dev/null || fail "Нет дозировки по умолчанию для формы"
+grep -F "title: 'Саше'" src/features/medicines/forms.ts >/dev/null || fail "Нет формы саше"'''
+)
 old_navigation = '''phase "Название и один непрозрачный список"
 if ! tap_from_last "Добавить первое лекарство"; then
   tap_from_last "+ Добавить" || { fail "Не удалось открыть добавление"; exit 1; }

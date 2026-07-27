@@ -1,4 +1,5 @@
-import type { Medicine } from '@/types'
+import { getDefaultDosageForForm, getMedicineFormOption } from '@/features/medicines/forms'
+import type { Medicine, MedicineForm } from '@/types'
 
 const dosageLabels: Record<string, string> = {
   '1_tab': '1 таблетка',
@@ -23,10 +24,14 @@ const frequencyLabels: Record<Medicine['frequency'], string> = {
   as_needed: 'По необходимости',
 }
 
-export function formatDosage(value: string): string {
+export function formatDosage(value: string, medicineForm?: MedicineForm): string {
   const normalized = value.trim()
-  if (!normalized) return '1 таблетка'
+  if (!normalized) return getDefaultDosageForForm(medicineForm)
   return dosageLabels[normalized] ?? normalized.replace(/_/g, ' ')
+}
+
+export function formatMedicineForm(medicineForm?: MedicineForm): string {
+  return getMedicineFormOption(medicineForm).title
 }
 
 export function formatFrequency(value: Medicine['frequency']): string {

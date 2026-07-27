@@ -15,7 +15,7 @@ import { BrandMark } from '@/components/BrandMark'
 import { AndroidUxEnhancer } from '@/components/AndroidUxEnhancer'
 
 export const metadata: Metadata = {
-  title: 'По часам 2',
+  title: 'По часам 3',
   description: 'Понятные напоминания о приёме лекарств',
 }
 

@@ -50,6 +50,7 @@ public final class ReminderSequencePlayer {
     private TextToSpeech textToSpeech;
     private Listener activeListener;
     private int previousAlarmVolume = -1;
+    private int appliedAlarmVolume = -1;
     private boolean completed;
 
     public ReminderSequencePlayer(Context context) {
@@ -79,7 +80,7 @@ public final class ReminderSequencePlayer {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build());
             player.setDataSource(context, uri);
-            player.setVolume(1f, 1f);
+            player.setVolume(spec.alarmVolume, spec.alarmVolume);
             player.setOnCompletionListener(completedPlayer -> {
                 releaseSignal(completedPlayer);
                 if (!isActive(run)) return;
@@ -96,7 +97,7 @@ public final class ReminderSequencePlayer {
                 return;
             }
             player.start();
-            Log.i(TAG, "Signal started, generation=" + run + ", resource=" + spec.soundResource);
+            Log.i(TAG, "Signal started, generation=" + run + ", resource=" + spec.soundResource + ", gain=" + spec.alarmVolume);
         } catch (Exception error) {
             fail(run, error);
         }
@@ -319,30 +320,42 @@ public final class ReminderSequencePlayer {
     }
 
     private void applyAlarmVolume(float requested) {
-        if (audioManager == null) return;
+        if (audioManager == null || requested < 0.75f) return;
         try {
             int maximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM);
             int minimum = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P
                 ? audioManager.getStreamMinVolume(AudioManager.STREAM_ALARM)
                 : 0;
-            if (previousAlarmVolume < 0) {
-                previousAlarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM);
-            }
-            int target = Math.max(minimum, Math.min(maximum, Math.round(maximum * requested)));
+            int current = audioManager.getStreamVolume(AudioManager.STREAM_ALARM);
+            int desired = Math.max(minimum, Math.min(maximum, Math.round(maximum * requested)));
+            int target = Math.max(current, desired);
+            if (target == current) return;
+            previousAlarmVolume = current;
+            appliedAlarmVolume = target;
             audioManager.setStreamVolume(AudioManager.STREAM_ALARM, target, 0);
+            Log.i(TAG, "Alarm stream temporarily raised from " + current + " to " + target + "/" + maximum);
         } catch (Exception error) {
             Log.w(TAG, "Could not set alarm volume", error);
+            previousAlarmVolume = -1;
+            appliedAlarmVolume = -1;
         }
     }
 
     private void restoreAlarmVolume() {
-        if (audioManager == null || previousAlarmVolume < 0) return;
+        if (audioManager == null || previousAlarmVolume < 0 || appliedAlarmVolume < 0) return;
         try {
-            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, previousAlarmVolume, 0);
+            int current = audioManager.getStreamVolume(AudioManager.STREAM_ALARM);
+            if (current == appliedAlarmVolume) {
+                audioManager.setStreamVolume(AudioManager.STREAM_ALARM, previousAlarmVolume, 0);
+                Log.i(TAG, "Alarm stream restored to " + previousAlarmVolume);
+            } else {
+                Log.i(TAG, "Alarm stream changed by user; app will not overwrite current value " + current);
+            }
         } catch (Exception error) {
             Log.w(TAG, "Could not restore alarm volume", error);
         } finally {
             previousAlarmVolume = -1;
+            appliedAlarmVolume = -1;
         }
     }
 }

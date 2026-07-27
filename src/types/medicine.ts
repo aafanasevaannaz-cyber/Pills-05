@@ -5,10 +5,27 @@ import type {
   VoiceRate,
 } from '@/features/sound/options'
 
+export type MedicineForm =
+  | 'tablet'
+  | 'capsule'
+  | 'sachet'
+  | 'drops'
+  | 'syrup'
+  | 'spray'
+  | 'inhaler'
+  | 'injection'
+  | 'cream'
+  | 'gel'
+  | 'patch'
+  | 'powder'
+  | 'solution'
+  | 'other'
+
 export interface Medicine {
   id: string
   name: string
   dosage: string
+  medicineForm?: MedicineForm
   frequency: 'daily' | 'every_other' | 'as_needed'
   scheduleType:
     | 'morning'

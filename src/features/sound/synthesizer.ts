@@ -1,4 +1,6 @@
+import { buildMedicineReminderText } from '@/features/medicines/forms'
 import { handleVoiceError } from '@/lib/errorHandler'
+import type { MedicineForm } from '@/types'
 
 export const speakText = async (
   text: string,
@@ -47,7 +49,8 @@ export const stopSpeaking = (): void => {
 export const isSpeakingSupported = (): boolean =>
   typeof window !== 'undefined' && Boolean(window.speechSynthesis)
 
-export const getMedicineReminder = (medicineName: string, dosage?: string): string =>
-  dosage
-    ? `Пора принять лекарство ${medicineName}. Дозировка: ${dosage}.`
-    : `Пора принять лекарство ${medicineName}.`
+export const getMedicineReminder = (
+  medicineName: string,
+  dosage?: string,
+  medicineForm?: MedicineForm
+): string => buildMedicineReminderText(medicineName, dosage ?? '', medicineForm)

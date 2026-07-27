@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useRemindersStore } from '@/features/reminders/store'
 import { stopAllReminderAudio } from '@/features/sound/stopAllAudio'
-import { formatDosage, formatFrequency, formatSchedule } from '@/lib/formatMedicine'
+import { formatDosage, formatFrequency, formatMedicineForm, formatSchedule } from '@/lib/formatMedicine'
 
 export function MedicinesScreen() {
   const medicines = useMedicinesStore((state) => state.medicines)
@@ -78,7 +78,7 @@ export function MedicinesScreen() {
                       {medicine.paused ? 'Приостановлено' : 'Активно'}
                     </span>
                   </div>
-                  <p className="medicine-details">{formatDosage(medicine.dosage)}</p>
+                  <p className="medicine-details">{formatMedicineForm(medicine.medicineForm)} · {formatDosage(medicine.dosage, medicine.medicineForm)}</p>
                   <p className="medicine-details">{formatFrequency(medicine.frequency)} · {formatSchedule(medicine)}</p>
                 </div>
 

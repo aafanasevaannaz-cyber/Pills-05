@@ -57,14 +57,31 @@ export function getDosagePresetsForForm(form?: MedicineForm): string[] {
   }
 }
 
+function inferMedicineFormFromDosage(dosage: string): MedicineForm | undefined {
+  const value = dosage.toLocaleLowerCase('ru-RU')
+  if (value.includes('саше')) return 'sachet'
+  if (value.includes('капсул')) return 'capsule'
+  if (value.includes('таблет')) return 'tablet'
+  if (value.includes('капл')) return 'drops'
+  if (value.includes('впрыск')) return 'spray'
+  if (value.includes('вдох')) return 'inhaler'
+  if (value.includes('инъекц') || value.includes('укол')) return 'injection'
+  if (value.includes('пластыр')) return 'patch'
+  if (value.includes('слой') || value.includes('нанести')) return 'cream'
+  if (value.includes('пакетик')) return 'powder'
+  if (value.includes('мл')) return 'solution'
+  return undefined
+}
+
 export function buildMedicineReminderText(
   medicineName: string,
   dosage: string,
   form?: MedicineForm
 ): string {
   const name = medicineName.trim() || 'лекарство'
-  const amount = dosage.trim() || getDefaultDosageForForm(form)
-  const verb = getMedicineFormOption(form).reminderVerb
+  const resolvedForm = form ?? inferMedicineFormFromDosage(dosage) ?? defaultMedicineForm
+  const amount = dosage.trim() || getDefaultDosageForForm(resolvedForm)
+  const verb = getMedicineFormOption(resolvedForm).reminderVerb
   const action = verb === 'take'
     ? `Пора принять ${name}.`
     : verb === 'apply'

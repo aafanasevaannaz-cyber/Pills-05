@@ -1,16 +1,21 @@
 import type { PersistedSettings } from '@/features/settings/store'
+import {
+  defaultMedicineForm,
+  getDefaultDosageForForm,
+} from '@/features/medicines/forms'
 import type {
   ReminderSound,
   ReminderVolume,
   VoiceMode,
   VoiceRate,
 } from '@/features/sound/options'
-import type { Medicine } from '@/types'
+import type { Medicine, MedicineForm } from '@/types'
 
 export type CourseChoice = 'ongoing' | '7' | '14' | '30' | '90' | 'custom'
 
 export type MedicineDraft = {
   name: string
+  medicineForm: MedicineForm
   frequency: Medicine['frequency'] | ''
   times: string[]
   dosage: string
@@ -66,9 +71,10 @@ const dateInputValue = (date?: Date): string => {
 
 export const createDraft = (settings: DraftSettings): MedicineDraft => ({
   name: '',
+  medicineForm: defaultMedicineForm,
   frequency: '',
   times: ['08:00'],
-  dosage: '1 таблетка',
+  dosage: getDefaultDosageForForm(defaultMedicineForm),
   sound: settings.soundChoice,
   volume: settings.volumeChoice,
   voiceMode: settings.defaultVoiceMode,
@@ -86,27 +92,31 @@ export const createDraft = (settings: DraftSettings): MedicineDraft => ({
   refillReminderDays: '3',
 })
 
-export const draftFromMedicine = (medicine: Medicine): MedicineDraft => ({
-  name: medicine.name,
-  frequency: medicine.frequency,
-  times: scheduleTimes(medicine),
-  dosage: medicine.dosage || '1 таблетка',
-  sound: medicine.reminderSound ?? 'classic',
-  volume: medicine.reminderVolume ?? 'maximum',
-  voiceMode: medicine.voiceMode ?? (medicine.voiceEnabled === false ? 'off' : 'android'),
-  voiceVolume: medicine.voiceVolume ?? 'maximum',
-  customVoiceVolume: medicine.customVoiceVolume ?? medicine.voiceVolume ?? 'maximum',
-  voiceRate: medicine.voiceRate ?? 'slow',
-  voicePitch: medicine.voicePitch ?? 1,
-  androidVoiceName: medicine.androidVoiceName ?? '',
-  customVoicePath: medicine.customVoicePath ?? '',
-  courseChoice: medicine.endDate ? 'custom' : 'ongoing',
-  customEndDate: dateInputValue(medicine.endDate),
-  trackStock: medicine.stockQuantity !== undefined,
-  stockQuantity: medicine.stockQuantity === undefined ? '' : String(medicine.stockQuantity),
-  unitsPerIntake: String(medicine.unitsPerIntake ?? 1),
-  refillReminderDays: String(medicine.refillReminderDays ?? 3),
-})
+export const draftFromMedicine = (medicine: Medicine): MedicineDraft => {
+  const medicineForm = medicine.medicineForm ?? defaultMedicineForm
+  return {
+    name: medicine.name,
+    medicineForm,
+    frequency: medicine.frequency,
+    times: scheduleTimes(medicine),
+    dosage: medicine.dosage || getDefaultDosageForForm(medicineForm),
+    sound: medicine.reminderSound ?? 'classic',
+    volume: medicine.reminderVolume ?? 'maximum',
+    voiceMode: medicine.voiceMode ?? (medicine.voiceEnabled === false ? 'off' : 'android'),
+    voiceVolume: medicine.voiceVolume ?? 'maximum',
+    customVoiceVolume: medicine.customVoiceVolume ?? medicine.voiceVolume ?? 'maximum',
+    voiceRate: medicine.voiceRate ?? 'slow',
+    voicePitch: medicine.voicePitch ?? 1,
+    androidVoiceName: medicine.androidVoiceName ?? '',
+    customVoicePath: medicine.customVoicePath ?? '',
+    courseChoice: medicine.endDate ? 'custom' : 'ongoing',
+    customEndDate: dateInputValue(medicine.endDate),
+    trackStock: medicine.stockQuantity !== undefined,
+    stockQuantity: medicine.stockQuantity === undefined ? '' : String(medicine.stockQuantity),
+    unitsPerIntake: String(medicine.unitsPerIntake ?? 1),
+    refillReminderDays: String(medicine.refillReminderDays ?? 3),
+  }
+}
 
 export const courseEndDate = (
   choice: CourseChoice,

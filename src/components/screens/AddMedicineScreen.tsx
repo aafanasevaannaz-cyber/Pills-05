@@ -15,6 +15,7 @@ import {
   draftFromMedicine,
   type MedicineDraft,
 } from '@/features/medicines/draft'
+import { getDefaultDosageForForm } from '@/features/medicines/forms'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useRemindersStore } from '@/features/reminders/store'
 import { useSettingsStore } from '@/features/settings/store'
@@ -22,7 +23,7 @@ import { deleteCustomVoice } from '@/features/sound/nativeAudio'
 import { stopAllReminderAudio } from '@/features/sound/stopAllAudio'
 import type { Medicine } from '@/types'
 
-const stepNames = ['Название', 'Частота', 'Время', 'Звук и голос', 'Дозировка']
+const stepNames = ['Название', 'Частота', 'Время', 'Звук и голос', 'Форма и дозировка']
 const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 
 export const AddMedicineScreen = () => {
@@ -112,7 +113,8 @@ export const AddMedicineScreen = () => {
     return {
       id: editingMedicine?.id ?? Date.now().toString(),
       name: draft.name.trim(),
-      dosage: draft.dosage.trim() || '1 таблетка',
+      medicineForm: draft.medicineForm,
+      dosage: draft.dosage.trim() || getDefaultDosageForForm(draft.medicineForm),
       frequency: draft.frequency || 'daily',
       scheduleType: 'custom',
       customTimes: draft.frequency === 'as_needed' ? undefined : Array.from(new Set(draft.times)).sort(),

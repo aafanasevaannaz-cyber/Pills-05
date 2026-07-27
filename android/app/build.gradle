@@ -24,11 +24,11 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.chaipodusham.pochasam.rebuild2"
+        applicationId "com.chaipodusham.pochasam.rebuild3"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "2.0-rebuild"
+        versionName "3.0-rebuild"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">По часам 2</string>
-    <string name="title_activity_main">По часам 2</string>
-    <string name="package_name">com.chaipodusham.pochasam.rebuild2</string>
-    <string name="custom_url_scheme">com.chaipodusham.pochasam.rebuild2</string>
+    <string name="app_name">По часам 3</string>
+    <string name="title_activity_main">По часам 3</string>
+    <string name="package_name">com.chaipodusham.pochasam.rebuild3</string>
+    <string name="custom_url_scheme">com.chaipodusham.pochasam.rebuild3</string>
 </resources>

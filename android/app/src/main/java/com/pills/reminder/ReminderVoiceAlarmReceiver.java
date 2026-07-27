@@ -14,8 +14,8 @@ import java.util.Map;
 
 public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
     private static final String TAG = "ReminderVoiceAlarm";
-    private static final String ACTION = "com.chaipodusham.pochasam.rebuild2.REMINDER_SEQUENCE";
-    private static final String PREFS = "medicine_voice_alarms_v2";
+    private static final String ACTION = "com.chaipodusham.pochasam.rebuild3.REMINDER_SEQUENCE";
+    private static final String PREFS = "medicine_voice_alarms_v3";
     private static final String KEY_PREFIX = "alarm_";
 
     @Override
@@ -122,6 +122,7 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.canScheduleExactAlarms()) {
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent);
+            Log.w(TAG, "Exact alarm permission is unavailable; scheduled best-effort alarm, requestCode=" + requestCode);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent);
         } else {
@@ -180,6 +181,7 @@ public class ReminderVoiceAlarmReceiver extends BroadcastReceiver {
         if (pendingIntent != null) {
             manager.cancel(pendingIntent);
             pendingIntent.cancel();
+            Log.i(TAG, "Cancelled reminder sequence, requestCode=" + requestCode);
         }
     }
 

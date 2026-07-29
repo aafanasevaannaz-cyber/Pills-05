@@ -58,7 +58,7 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
 
   return (
     <div className="schedule-editor page-stack">
-      <div>
+      <div className="schedule-count-section">
         <span className="ui-label">Сколько раз в день?</span>
         <div className="schedule-count-grid" role="group" aria-label="Количество приёмов в день">
           {[1, 2, 3, 4].map((count) => (
@@ -88,34 +88,30 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
               )}
             </div>
 
-            <label className="schedule-time-picker">
-              <span>Время</span>
+            <div className="schedule-time-main">
               <input
                 aria-label={`Время приёма ${index + 1}`}
                 className="ui-input schedule-time-native-input"
                 type="time"
                 inputMode="none"
+                lang="ru-RU"
                 step={60}
                 value={time}
                 onChange={(event) => replace(index, event.target.value)}
               />
-            </label>
-
-            <div className="schedule-time-adjustments" role="group" aria-label={`Изменение времени приёма ${index + 1}`}>
               <button
                 type="button"
                 aria-label={`Приём ${index + 1}, минус 15 минут`}
                 onClick={() => replace(index, addMinutes(time, -15))}
               >
-                −15 мин
+                −15
               </button>
-              <strong aria-live="polite">{time}</strong>
               <button
                 type="button"
                 aria-label={`Приём ${index + 1}, плюс 15 минут`}
                 onClick={() => replace(index, addMinutes(time, 15))}
               >
-                +15 мин
+                +15
               </button>
             </div>
 

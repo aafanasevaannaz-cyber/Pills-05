@@ -14,36 +14,41 @@ const presets: Record<number, string[]> = {
   4: ['08:00', '12:00', '16:00', '20:00'],
 }
 
+const quickTimes = ['08:00', '12:00', '18:00', '22:00']
+const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 const twoDigits = (value: number) => String(value).padStart(2, '0')
-const clamp = (value: number, minimum: number, maximum: number) =>
-  Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum))
 
-const normalizeTime = (hours: number, minutes: number) =>
-  `${twoDigits(clamp(hours, 0, 23))}:${twoDigits(clamp(minutes, 0, 59))}`
+const normalizeTime = (value: string, fallback = '08:00') => validTime(value) ? value : fallback
 
-const parts = (time: string): [number, number] => {
-  const [hours, minutes] = time.split(':').map(Number)
-  return [clamp(hours, 0, 23), clamp(minutes, 0, 59)]
+const addMinutes = (time: string, delta: number) => {
+  const [hours, minutes] = normalizeTime(time).split(':').map(Number)
+  const dayMinutes = 24 * 60
+  const total = ((hours * 60 + minutes + delta) % dayMinutes + dayMinutes) % dayMinutes
+  return `${twoDigits(Math.floor(total / 60))}:${twoDigits(total % 60)}`
 }
 
 export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEditorProps) => {
-  const safeTimes = times.length ? times : ['08:00']
+  const safeTimes = times.length ? times.map((time, index) => normalizeTime(time, presets[4][index] ?? '08:00')) : ['08:00']
+  const hasDuplicates = new Set(safeTimes).size !== safeTimes.length
 
   const replace = (index: number, nextTime: string) => {
+    if (!validTime(nextTime)) return
     onChange(safeTimes.map((time, current) => current === index ? nextTime : time))
   }
 
   const setCount = (count: number) => {
     const preset = presets[count]
-    if (preset) {
-      const next = preset.map((fallback, index) => safeTimes[index] ?? fallback)
-      onChange(next)
-    }
+    if (!preset) return
+    onChange(preset.map((fallback, index) => safeTimes[index] ?? fallback))
   }
 
   const addTime = () => {
-    const [lastHours, lastMinutes] = parts(safeTimes[safeTimes.length - 1] ?? '08:00')
-    onChange([...safeTimes, normalizeTime((lastHours + 4) % 24, lastMinutes)])
+    const lastTime = safeTimes[safeTimes.length - 1] ?? '08:00'
+    let candidate = addMinutes(lastTime, 4 * 60)
+    for (let attempt = 0; attempt < 24 && safeTimes.includes(candidate); attempt += 1) {
+      candidate = addMinutes(candidate, 60)
+    }
+    onChange([...safeTimes, candidate])
   }
 
   const removeTime = (index: number) => {
@@ -72,65 +77,71 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
       </div>
 
       <div className="schedule-times page-stack">
-        {safeTimes.map((time, index) => {
-          const [hours, minutes] = parts(time)
-          return (
-            <section className="schedule-time-row" key={`${index}-${time}`}>
-              <div className="schedule-time-row__heading">
-                <strong>Приём {index + 1}</strong>
-                {safeTimes.length > 1 && (
-                  <button type="button" className="schedule-time-remove" onClick={() => removeTime(index)}>
-                    Удалить
-                  </button>
-                )}
-              </div>
-              <div className="schedule-time-inputs" aria-label={`Время приёма ${index + 1}`}>
-                <label>
-                  <span>Часы</span>
-                  <input
-                    aria-label={`Часы приёма ${index + 1}`}
-                    className="ui-input schedule-number-input"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={23}
-                    value={hours}
-                    onChange={(event) => replace(index, normalizeTime(Number(event.target.value), minutes))}
-                  />
-                </label>
-                <span className="schedule-time-colon" aria-hidden="true">:</span>
-                <label>
-                  <span>Минуты</span>
-                  <input
-                    aria-label={`Минуты приёма ${index + 1}`}
-                    className="ui-input schedule-number-input"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={59}
-                    value={minutes}
-                    onChange={(event) => replace(index, normalizeTime(hours, Number(event.target.value)))}
-                  />
-                </label>
-              </div>
-              <div className="schedule-minute-shortcuts" aria-label={`Быстрый выбор минут приёма ${index + 1}`}>
-                {[0, 15, 30, 45].map((minute) => (
-                  <button
-                    type="button"
-                    className={minutes === minute ? 'is-selected' : ''}
-                    aria-label={`Приём ${index + 1}, минуты ${twoDigits(minute)}`}
-                    aria-pressed={minutes === minute}
-                    key={minute}
-                    onClick={() => replace(index, normalizeTime(hours, minute))}
-                  >
-                    :{twoDigits(minute)}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )
-        })}
+        {safeTimes.map((time, index) => (
+          <section className="schedule-time-row" key={`medicine-time-${index}`}>
+            <div className="schedule-time-row__heading">
+              <strong>Приём {index + 1}</strong>
+              {safeTimes.length > 1 && (
+                <button type="button" className="schedule-time-remove" onClick={() => removeTime(index)}>
+                  Удалить
+                </button>
+              )}
+            </div>
+
+            <label className="schedule-time-picker">
+              <span>Время</span>
+              <input
+                aria-label={`Время приёма ${index + 1}`}
+                className="ui-input schedule-time-native-input"
+                type="time"
+                inputMode="none"
+                step={60}
+                value={time}
+                onChange={(event) => replace(index, event.target.value)}
+              />
+            </label>
+
+            <div className="schedule-time-adjustments" role="group" aria-label={`Изменение времени приёма ${index + 1}`}>
+              <button
+                type="button"
+                aria-label={`Приём ${index + 1}, минус 15 минут`}
+                onClick={() => replace(index, addMinutes(time, -15))}
+              >
+                −15 мин
+              </button>
+              <strong aria-live="polite">{time}</strong>
+              <button
+                type="button"
+                aria-label={`Приём ${index + 1}, плюс 15 минут`}
+                onClick={() => replace(index, addMinutes(time, 15))}
+              >
+                +15 мин
+              </button>
+            </div>
+
+            <div className="schedule-time-presets" role="group" aria-label={`Быстрое время приёма ${index + 1}`}>
+              {quickTimes.map((quickTime) => (
+                <button
+                  type="button"
+                  className={time === quickTime ? 'is-selected' : ''}
+                  aria-label={`Приём ${index + 1}, установить ${quickTime}`}
+                  aria-pressed={time === quickTime}
+                  key={quickTime}
+                  onClick={() => replace(index, quickTime)}
+                >
+                  {quickTime}
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
+
+      {hasDuplicates && (
+        <div className="status-strip status-strip--warning" role="alert">
+          Два приёма стоят на одно время. Измените один из них.
+        </div>
+      )}
 
       <Button variant="secondary" className="ui-button--full" onClick={addTime}>
         + Добавить ещё время

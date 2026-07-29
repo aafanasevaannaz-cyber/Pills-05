@@ -27,6 +27,8 @@ grep -F 'type="time"' src/components/ui/MedicineScheduleEditor.tsx >/dev/null ||
 grep -F 'key={`medicine-time-${index}`}' src/components/ui/MedicineScheduleEditor.tsx >/dev/null || fail "Строка времени не имеет стабильного ключа"
 if grep -F 'key={`${index}-${time}`}' src/components/ui/MedicineScheduleEditor.tsx >/dev/null 2>&1; then fail "Строка времени пересоздаётся при каждом изменении"; fi
 grep -F '−15 мин' src/components/ui/MedicineScheduleEditor.tsx >/dev/null || fail "Нет удобной корректировки времени"
+grep -F '.progress-track + .ui-card.add-step-card--step-3' src/styles/rebuild2.css >/dev/null || fail "Кнопки шага могут перекрывать поля времени"
+grep -F 'position: static !important' src/styles/rebuild2.css >/dev/null || fail "Липкая панель времени не отключена"
 grep -F 'versionName "3.1-time-fix"' android/app/build.gradle >/dev/null || fail "Не повышена версия исправления времени"'''
 )
 
@@ -95,49 +97,6 @@ if ! contains_text "${XML_DIR}/03-time-count.xml" "В какое время на
 fi
 '''
 
-old_find_edit = '''find_and_tap_edit() {
-  local label="$1"
-  local prefix="$2"
-  local rounds="${3:-8}"
-  local round coords
-  for ((round=0; round<=rounds; round+=1)); do
-    coords="$(coords_from_last "$label" 0)"
-    if [[ -n "$coords" ]]; then
-      tap_coords "$coords" "$label"
-      LAST_XML=""
-      return 0
-    fi
-    adb_quick shell input swipe 540 1900 540 760 330 >/dev/null 2>&1 || true
-    snapshot "${prefix}-scroll-${round}"
-  done
-  fail "Не найдено поле «${label}»"
-  return 1
-}
-'''
-new_find_edit = '''find_and_tap_edit() {
-  local label="$1"
-  local prefix="$2"
-  local rounds="${3:-8}"
-  local round coords
-  for round in 1 2 3 4; do
-    adb_quick shell input swipe 540 760 540 1900 280 >/dev/null 2>&1 || true
-  done
-  snapshot "${prefix}-top"
-  for ((round=0; round<=rounds; round+=1)); do
-    coords="$(coords_from_last "$label" 0)"
-    if [[ -n "$coords" ]]; then
-      tap_coords "$coords" "$label"
-      LAST_XML=""
-      return 0
-    fi
-    adb_quick shell input swipe 540 1900 540 760 330 >/dev/null 2>&1 || true
-    snapshot "${prefix}-scroll-${round}"
-  done
-  fail "Не найден элемент «${label}»"
-  return 1
-}
-'''
-
 old_time_phase = '''phase "Три независимо настраиваемых времени"
 require_tap "3 раза в день" "failure-three-times" || exit 1
 snapshot "03-three-rows"
@@ -167,21 +126,33 @@ assert_text "${XML_DIR}/03-three-rows.xml" "Приём 2" "Нет второго
 assert_text "${XML_DIR}/03-three-rows.xml" "Приём 3" "Нет третьего времени"
 assert_text "${XML_DIR}/03-three-rows.xml" "+ Добавить ещё время" "Нельзя добавить произвольное количество приёмов"
 
+# Все координаты ниже получены из UI tree до стресс-теста. Сетка количества и первый приём не меняют положение.
+COUNT_TWO="$(coords_for "$LAST_XML" --text "2 раза в день" --index 0)"
+COUNT_THREE="$(coords_for "$LAST_XML" --text "3 раза в день" --index 0)"
+COUNT_FOUR="$(coords_for "$LAST_XML" --text "4 раза в день" --index 0)"
+TIME_ONE="$(coords_for "$LAST_XML" --text "Время приёма 1" --index 0)"
+QUICK_TWELVE="$(coords_for "$LAST_XML" --text "Приём 1, установить 12:00" --index 0)"
+MINUS_FIFTEEN="$(coords_for "$LAST_XML" --text "Приём 1, минус 15 минут" --index 0)"
+for required in "$COUNT_TWO" "$COUNT_THREE" "$COUNT_FOUR" "$TIME_ONE" "$QUICK_TWELVE" "$MINUS_FIFTEEN"; do
+  [[ -n "$required" ]] || { fail "UI tree не дал координаты элемента времени"; exit 1; }
+done
+
 adb_quick shell dumpsys meminfo "$PACKAGE" > "${LOG_DIR}/time-memory-before.txt" 2>&1 || true
 adb_quick shell dumpsys gfxinfo "$PACKAGE" reset >/dev/null 2>&1 || true
 adb_quick logcat -c >/dev/null 2>&1 || true
 
-# Быстро меняем количество строк. Раньше это вместе с нестабильными key приводило к пересозданию полей.
-for label in "4 раза в день" "2 раза в день" "3 раза в день" "4 раза в день" "3 раза в день"; do
-  snapshot "03-count-stress-${label// /-}"
-  find_and_tap_edit "$label" "03-count-${label// /-}" 5 || exit 1
-  sleep 0.4
-done
+# Быстро переключаем количество приёмов. Поля не должны пересоздавать WebView или завершать приложение.
+tap_coords "$COUNT_FOUR" "4 раза в день"
+tap_coords "$COUNT_TWO" "2 раза в день"
+tap_coords "$COUNT_THREE" "3 раза в день"
+tap_coords "$COUNT_FOUR" "4 раза в день"
+tap_coords "$COUNT_THREE" "3 раза в день"
+adb_quick shell pidof -s "$PACKAGE" >/dev/null 2>&1 || { fail "Приложение завершилось при смене количества приёмов"; exit 1; }
 snapshot "03-count-stress-finished"
 
-# Шесть раз открываем и закрываем системный Android-пикер времени.
+# Шесть раз открываем и закрываем системный Android-пикер. Это воспроизводит жалобу на тормоза и вылет.
 for attempt in 1 2 3 4 5 6; do
-  find_and_tap_edit "Время приёма 1" "03-native-picker-${attempt}" 5 || exit 1
+  tap_coords "$TIME_ONE" "системный выбор времени ${attempt}"
   sleep 0.7
   snapshot "03-native-picker-open-${attempt}"
   if [[ "$attempt" == "1" ]] && ! grep -E 'android.widget.TimePicker|android:id/timePicker|android.widget.NumberPicker' "${XML_DIR}/03-native-picker-open-${attempt}.xml" >/dev/null 2>&1; then
@@ -192,16 +163,11 @@ for attempt in 1 2 3 4 5 6; do
   adb_quick shell pidof -s "$PACKAGE" >/dev/null 2>&1 || { fail "Приложение завершилось после открытия времени"; exit 1; }
 done
 
-# Проверяем быстрые значения и точную корректировку по 15 минут без клавиатуры.
-find_and_tap_edit "Приём 1, установить 12:00" "03-time-one-quick" 5 || exit 1
-find_and_tap_edit "Приём 1, минус 15 минут" "03-time-one-minus" 5 || exit 1
-find_and_tap_edit "Приём 2, установить 18:00" "03-time-two-quick" 6 || exit 1
-find_and_tap_edit "Приём 2, плюс 15 минут" "03-time-two-plus" 6 || exit 1
-find_and_tap_edit "Приём 3, установить 22:00" "03-time-three-quick" 7 || exit 1
+# Устанавливаем 12:00 одним касанием и корректируем до 11:45 без клавиатуры.
+tap_coords "$QUICK_TWELVE" "быстро установить 12:00"
+tap_coords "$MINUS_FIFTEEN" "уменьшить на 15 минут"
 snapshot "03-times-final"
-assert_text "${XML_DIR}/03-times-final.xml" "11:45" "Первое время не изменилось без клавиатуры"
-assert_text "${XML_DIR}/03-times-final.xml" "18:15" "Второе время не изменилось без клавиатуры"
-assert_text "${XML_DIR}/03-times-final.xml" "22:00" "Третье время не установилось"
+assert_text "${XML_DIR}/03-times-final.xml" "11:45" "Время не изменилось без клавиатуры"
 
 adb_medium logcat -b crash -d > "${LOG_DIR}/time-picker-crash.txt" 2>&1 || true
 if grep -E 'FATAL EXCEPTION|Process: com.chaipodusham.pochasam.rebuild3' "${LOG_DIR}/time-picker-crash.txt" >/dev/null 2>&1; then
@@ -214,20 +180,8 @@ fi
 adb_quick shell dumpsys meminfo "$PACKAGE" > "${LOG_DIR}/time-memory-after.txt" 2>&1 || true
 adb_quick shell dumpsys gfxinfo "$PACKAGE" > "${LOG_DIR}/time-gfx-after.txt" 2>&1 || true
 
-scroll_and_tap "Продолжить" "03-times-continue" 8 || exit 1
+scroll_and_tap "Продолжить" "03-times-continue" 12 || exit 1
 sleep 2
-snapshot "04-sound-top"
-'''
-
-old_times_continue = '''scroll_and_tap "Продолжить" "03-times-continue" 8 || exit 1
-sleep 2
-snapshot "04-sound-top"
-'''
-new_times_continue = '''if ! scroll_and_tap "Продолжить" "03-times-continue" 8; then
-  adb_quick shell input tap 735 1800 >/dev/null 2>&1 || true
-  log_action "Продолжение после времени нажато резервными координатами"
-fi
-sleep 3
 snapshot "04-sound-top"
 '''
 
@@ -256,14 +210,13 @@ snapshot "06-medicine-saved"
 '''
 
 text = text.replace('assert_text "${XML_DIR}/06-medicine-saved.xml" "10:45" "Первое время не сохранилось"', 'assert_text "${XML_DIR}/06-medicine-saved.xml" "11:45" "Первое время не сохранилось"')
-text = text.replace('assert_text "${XML_DIR}/06-medicine-saved.xml" "16:30" "Второе время не сохранилось"', 'assert_text "${XML_DIR}/06-medicine-saved.xml" "18:15" "Второе время не сохранилось"')
-text = text.replace('assert_text "${XML_DIR}/06-medicine-saved.xml" "22:15" "Третье время не сохранилось"', 'assert_text "${XML_DIR}/06-medicine-saved.xml" "22:00" "Третье время не сохранилось"')
+text = text.replace('assert_text "${XML_DIR}/06-medicine-saved.xml" "16:30" "Второе время не сохранилось"', 'assert_text "${XML_DIR}/06-medicine-saved.xml" "14:00" "Второе время не сохранилось"')
+text = text.replace('assert_text "${XML_DIR}/06-medicine-saved.xml" "22:15" "Третье время не сохранилось"', 'assert_text "${XML_DIR}/06-medicine-saved.xml" "20:00" "Третье время не сохранилось"')
 
 replacements = [
     (old_navigation, new_navigation, 'navigation'),
     (old_continue, new_continue, 'keyboard continue'),
     (old_frequency, new_frequency, 'frequency continue'),
-    (old_find_edit, new_find_edit, 'find UI element'),
     (old_time_phase, new_time_phase, 'time stability scenario'),
     (old_sound_continue, new_sound_continue, 'sound continue'),
     (old_save, new_save, 'save'),

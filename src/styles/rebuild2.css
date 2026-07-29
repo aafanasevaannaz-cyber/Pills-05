@@ -72,10 +72,11 @@
   background: var(--surface-soft);
   color: var(--text);
   font-weight: 800;
+  touch-action: manipulation;
 }
 
 .schedule-count.is-selected,
-.schedule-minute-shortcuts button.is-selected,
+.schedule-time-presets button.is-selected,
 .dosage-shortcuts button.is-selected {
   border-color: var(--primary);
   background: var(--primary);
@@ -88,11 +89,12 @@
 
 .schedule-time-row {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--surface-soft);
+  contain: layout style;
 }
 
 .schedule-time-row__heading {
@@ -103,60 +105,85 @@
 }
 
 .schedule-time-remove {
+  min-height: 42px;
   border: 0;
   background: transparent;
   color: var(--danger);
   font-weight: 750;
-  padding: 8px;
+  padding: 8px 10px;
+  touch-action: manipulation;
 }
 
-.schedule-time-inputs {
+.schedule-time-picker {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.schedule-time-native-input {
+  width: 100%;
+  min-height: 64px !important;
+  padding: 8px 12px !important;
+  border: 2px solid var(--border) !important;
+  border-radius: 16px !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  font-size: 1.7rem !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  text-align: center;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+}
+
+.schedule-time-native-input:focus {
+  border-color: var(--primary) !important;
+  outline: 3px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  outline-offset: 1px;
+}
+
+.schedule-time-native-input::-webkit-calendar-picker-indicator {
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  opacity: 0.82;
+  cursor: pointer;
+}
+
+.schedule-time-adjustments {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: end;
+  align-items: center;
   gap: 8px;
 }
 
-.schedule-time-inputs label {
-  display: grid;
-  gap: 5px;
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.schedule-number-input {
-  min-width: 0;
-  min-height: 58px !important;
-  padding: 8px 10px !important;
+.schedule-time-adjustments strong {
+  min-width: 70px;
   text-align: center;
-  font-size: 1.45rem;
-  font-weight: 850;
-  background: var(--surface) !important;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.schedule-time-colon {
-  padding-bottom: 8px;
-  font-size: 1.65rem;
-  font-weight: 900;
-}
-
-.schedule-minute-shortcuts,
-.dosage-shortcuts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.schedule-minute-shortcuts button,
+.schedule-time-adjustments button,
+.schedule-time-presets button,
 .dosage-shortcuts button {
-  min-height: 44px;
-  padding: 7px;
+  min-height: 46px;
+  padding: 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
   color: var(--text);
   font-weight: 750;
+  touch-action: manipulation;
+}
+
+.schedule-time-presets,
+.dosage-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .stock-fields {
@@ -181,8 +208,7 @@
   box-shadow: 0 -8px 20px rgba(25, 26, 24, 0.08);
 }
 
-/* На длинном экране расписания липкая панель перекрывала поля времени.
-   Здесь действия идут обычным блоком после всех приёмов. */
+/* На длинном экране расписания действия идут после всех приёмов и ничего не перекрывают. */
 .add-step-card--step-3 .add-step-actions {
   position: static;
   bottom: auto;
@@ -207,13 +233,17 @@ html[data-keyboard-open='true'] .add-step-actions {
 }
 
 @media (max-width: 420px) {
-  .schedule-minute-shortcuts,
+  .schedule-time-presets,
   .dosage-shortcuts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .schedule-time-row {
     padding: 12px;
+  }
+
+  .schedule-time-adjustments {
+    grid-template-columns: 1fr 76px 1fr;
   }
 }
 

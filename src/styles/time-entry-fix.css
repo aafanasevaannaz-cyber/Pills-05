@@ -1,0 +1,33 @@
+/* Финальная компоновка шага времени: три приёма и действия помещаются без длинной прокрутки. */
+.add-step-card--step-3 {
+  padding: 12px !important;
+}
+
+.add-step-card--step-3 > .page-stack {
+  gap: 10px !important;
+}
+
+.add-step-card--step-3 .section-title {
+  margin-bottom: 4px;
+  font-size: 1.16rem;
+}
+
+.add-step-card--step-3 .section-title + .muted {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.28;
+}
+
+.add-step-card--step-3 .schedule-editor {
+  gap: 8px !important;
+}
+
+.add-step-card--step-3 .form-actions {
+  scroll-margin-bottom: calc(96px + var(--safe-bottom));
+}
+
+@media (max-height: 760px) {
+  .add-step-card--step-3 .section-title + .muted {
+    display: none;
+  }
+}

@@ -39,6 +39,79 @@ for old, new in replacements.items():
     if old not in text:
         raise SystemExit(f'QA time patch target not found: {old}')
     text = text.replace(old, new)
+
+old_sound = '''phase "Остановка сигнала до запуска голоса"
+adb_quick logcat -c >/dev/null 2>&1 || true
+scroll_and_tap "Послушать всё напоминание" "04-preview-stop" 14 || exit 1
+sleep 1
+snapshot "04-preview-running"
+scroll_and_tap "Остановить всё" "04-stop" 3 || exit 1
+sleep 5
+adb_medium logcat -d > "${LOG_DIR}/sequence-stopped.txt" 2>&1 || true
+grep -F "Signal started" "${LOG_DIR}/sequence-stopped.txt" >/dev/null || fail "Единый проигрыватель не запустил сигнал"
+grep -F "Sequence stopped" "${LOG_DIR}/sequence-stopped.txt" >/dev/null || fail "Команда остановки не дошла до проигрывателя"
+if grep -F "Android voice started" "${LOG_DIR}/sequence-stopped.txt" >/dev/null; then
+  fail "Голос запустился после ранней остановки"
+fi
+snapshot "04-after-stop"
+
+phase "Передача от окончания сигнала к голосу"
+adb_quick logcat -c >/dev/null 2>&1 || true
+scroll_and_tap "Послушать всё напоминание" "04-preview-handoff" 3 || exit 1
+sleep 8
+adb_medium logcat -d > "${LOG_DIR}/sequence-handoff.txt" 2>&1 || true
+if grep -F "Android voice started" "${LOG_DIR}/sequence-handoff.txt" >/dev/null; then
+  VOICE_ENV="русский TTS запустился"
+elif grep -E "Русский голос Android не установлен|Russian|LANG_MISSING_DATA|LANG_NOT_SUPPORTED" "${LOG_DIR}/sequence-handoff.txt" >/dev/null; then
+  VOICE_ENV="на эмуляторе отсутствует русский TTS; переход к голосу и обработка ошибки проверены"
+  log_action "Русский TTS отсутствует в системном образе эмулятора"
+else
+  fail "После окончания сигнала нет запуска голоса или понятной ошибки TTS"
+  VOICE_ENV="неопределённая ошибка"
+fi
+snapshot "04-after-handoff"
+scroll_and_tap "Остановить всё" "04-stop-after-handoff" 3 || true
+'''
+
+new_sound = '''phase "Остановка сигнала до запуска голоса"
+adb_quick logcat -c >/dev/null 2>&1 || true
+scroll_until_visible "Послушать всё напоминание" "04-preview-stop" 14 || exit 1
+PREVIEW_COORD="$(coords_from_last "Послушать всё напоминание" 0)"
+STOP_COORD="$(coords_from_last "Остановить всё" 0)"
+[[ -n "$PREVIEW_COORD" && -n "$STOP_COORD" ]] || { fail "UI tree не дал координаты управления звуком"; exit 1; }
+tap_coords "$PREVIEW_COORD" "Послушать всё напоминание"
+sleep 0.35
+tap_coords "$STOP_COORD" "Остановить всё до запуска голоса"
+sleep 5
+adb_quick exec-out screencap -p > "${SCREEN_DIR}/04-after-early-stop.png" 2>/dev/null || true
+adb_medium logcat -d > "${LOG_DIR}/sequence-stopped.txt" 2>&1 || true
+grep -F "Signal started" "${LOG_DIR}/sequence-stopped.txt" >/dev/null || fail "Единый проигрыватель не запустил сигнал"
+grep -F "Sequence stopped" "${LOG_DIR}/sequence-stopped.txt" >/dev/null || fail "Команда остановки не дошла до проигрывателя"
+if grep -F "Android voice started" "${LOG_DIR}/sequence-stopped.txt" >/dev/null; then
+  fail "Голос запустился после ранней остановки"
+fi
+
+phase "Передача от окончания сигнала к голосу"
+adb_quick logcat -c >/dev/null 2>&1 || true
+tap_coords "$PREVIEW_COORD" "Послушать всё напоминание повторно"
+sleep 8
+adb_medium logcat -d > "${LOG_DIR}/sequence-handoff.txt" 2>&1 || true
+if grep -F "Android voice started" "${LOG_DIR}/sequence-handoff.txt" >/dev/null; then
+  VOICE_ENV="русский TTS запустился"
+elif grep -E "Русский голос Android не установлен|Russian|LANG_MISSING_DATA|LANG_NOT_SUPPORTED" "${LOG_DIR}/sequence-handoff.txt" >/dev/null; then
+  VOICE_ENV="на эмуляторе отсутствует русский TTS; переход к голосу и обработка ошибки проверены"
+  log_action "Русский TTS отсутствует в системном образе эмулятора"
+else
+  fail "После окончания сигнала нет запуска голоса или понятной ошибки TTS"
+  VOICE_ENV="неопределённая ошибка"
+fi
+tap_coords "$STOP_COORD" "Остановить всё после проверки голоса"
+sleep 1
+'''
+
+if old_sound not in text:
+    raise SystemExit('QA sound-sequence patch target not found')
+text = text.replace(old_sound, new_sound)
 path.write_text(text, encoding='utf-8')
 PY
 

@@ -208,14 +208,21 @@
   box-shadow: 0 -8px 20px rgba(25, 26, 24, 0.08);
 }
 
-/* На длинном экране расписания действия идут после всех приёмов и ничего не перекрывают. */
-.add-step-card--step-3 .add-step-actions {
-  position: static;
-  bottom: auto;
-  margin: 18px 0 0;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
+/* Общий qa-ux.css использует более специфичное липкое правило.
+   На длинном экране времени полностью отключаем его, чтобы кнопки не закрывали поля. */
+.progress-track + .ui-card.add-step-card--step-3 .form-actions.add-step-actions {
+  position: static !important;
+  z-index: auto !important;
+  inset: auto !important;
+  bottom: auto !important;
+  margin: 20px 0 0 !important;
+  padding: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 html[data-keyboard-open='true'] .add-step-actions {

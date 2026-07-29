@@ -135,8 +135,8 @@ jobs:
         continue-on-error: true
         run: |
           export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-          chmod +x qa/android/run_rebuild2_qa.sh qa/android/run_rebuild2_qa_v2.sh qa/android/ui_pick.py
-          bash qa/android/run_rebuild2_qa_v2.sh apk/app-debug.apk
+          chmod +x qa/android/run_rebuild2_qa.sh qa/android/run_rebuild2_qa_v2.sh qa/android/run_rebuild3_time_qa.sh qa/android/ui_pick.py
+          bash qa/android/run_rebuild3_time_qa.sh apk/app-debug.apk
 
       - name: Record emulator infrastructure failure
         if: steps.qa.conclusion == 'skipped'

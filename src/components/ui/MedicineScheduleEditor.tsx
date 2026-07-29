@@ -14,10 +14,8 @@ const presets: Record<number, string[]> = {
   4: ['08:00', '12:00', '16:00', '20:00'],
 }
 
-const quickTimes = ['08:00', '12:00', '18:00', '22:00']
 const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 const twoDigits = (value: number) => String(value).padStart(2, '0')
-
 const normalizeTime = (value: string, fallback = '08:00') => validTime(value) ? value : fallback
 
 const addMinutes = (time: string, delta: number) => {
@@ -78,57 +76,44 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
 
       <div className="schedule-times page-stack">
         {safeTimes.map((time, index) => (
-          <section className="schedule-time-row" key={`medicine-time-${index}`}>
-            <div className="schedule-time-row__heading">
-              <strong>Приём {index + 1}</strong>
-              {safeTimes.length > 1 && (
-                <button type="button" className="schedule-time-remove" onClick={() => removeTime(index)}>
-                  Удалить
-                </button>
-              )}
-            </div>
-
-            <div className="schedule-time-main">
-              <input
-                aria-label={`Время приёма ${index + 1}`}
-                className="ui-input schedule-time-native-input"
-                type="time"
-                inputMode="none"
-                lang="ru-RU"
-                step={60}
-                value={time}
-                onChange={(event) => replace(index, event.target.value)}
-              />
+          <section className="schedule-time-row" key={`medicine-time-${index}`} aria-label={`Приём ${index + 1}`}>
+            <strong className="schedule-time-index" aria-hidden="true">{index + 1}</strong>
+            <input
+              aria-label={`Время приёма ${index + 1}`}
+              className="ui-input schedule-time-native-input"
+              type="time"
+              inputMode="none"
+              lang="ru-RU"
+              step={60}
+              value={time}
+              onChange={(event) => replace(index, event.target.value)}
+            />
+            <button
+              type="button"
+              className="schedule-time-step"
+              aria-label={`Приём ${index + 1}, минус 15 минут`}
+              onClick={() => replace(index, addMinutes(time, -15))}
+            >
+              −15
+            </button>
+            <button
+              type="button"
+              className="schedule-time-step"
+              aria-label={`Приём ${index + 1}, плюс 15 минут`}
+              onClick={() => replace(index, addMinutes(time, 15))}
+            >
+              +15
+            </button>
+            {safeTimes.length > 1 && (
               <button
                 type="button"
-                aria-label={`Приём ${index + 1}, минус 15 минут`}
-                onClick={() => replace(index, addMinutes(time, -15))}
+                className="schedule-time-remove"
+                aria-label={`Удалить время приёма ${index + 1}`}
+                onClick={() => removeTime(index)}
               >
-                −15
+                ×
               </button>
-              <button
-                type="button"
-                aria-label={`Приём ${index + 1}, плюс 15 минут`}
-                onClick={() => replace(index, addMinutes(time, 15))}
-              >
-                +15
-              </button>
-            </div>
-
-            <div className="schedule-time-presets" role="group" aria-label={`Быстрое время приёма ${index + 1}`}>
-              {quickTimes.map((quickTime) => (
-                <button
-                  type="button"
-                  className={time === quickTime ? 'is-selected' : ''}
-                  aria-label={`Приём ${index + 1}, установить ${quickTime}`}
-                  aria-pressed={time === quickTime}
-                  key={quickTime}
-                  onClick={() => replace(index, quickTime)}
-                >
-                  {quickTime}
-                </button>
-              ))}
-            </div>
+            )}
           </section>
         ))}
       </div>
@@ -139,7 +124,7 @@ export const MedicineScheduleEditor = ({ times, onChange }: MedicineScheduleEdit
         </div>
       )}
 
-      <Button variant="secondary" className="ui-button--full" onClick={addTime}>
+      <Button variant="secondary" className="ui-button--full schedule-add-time" onClick={addTime}>
         + Добавить ещё время
       </Button>
     </div>

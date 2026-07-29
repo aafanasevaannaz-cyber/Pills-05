@@ -56,19 +56,25 @@
 
 .schedule-editor {
   width: 100%;
+  gap: 10px !important;
+}
+
+.schedule-count-section {
+  display: grid;
+  gap: 6px;
 }
 
 .schedule-count-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 8px;
+  gap: 7px;
+  margin-top: 0;
 }
 
 .schedule-count {
-  min-height: 52px;
+  min-height: 46px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 13px;
   background: var(--surface-soft);
   color: var(--text);
   font-weight: 800;
@@ -84,15 +90,15 @@
 }
 
 .schedule-times {
-  gap: 12px;
+  gap: 8px !important;
 }
 
 .schedule-time-row {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 7px;
+  padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--surface-soft);
   contain: layout style;
 }
@@ -101,40 +107,45 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.schedule-time-row__heading strong {
+  font-size: 1rem;
 }
 
 .schedule-time-remove {
-  min-height: 42px;
+  min-height: 34px;
   border: 0;
   background: transparent;
   color: var(--danger);
   font-weight: 750;
-  padding: 8px 10px;
+  padding: 4px 8px;
   touch-action: manipulation;
 }
 
-.schedule-time-picker {
+.schedule-time-main {
   display: grid;
-  gap: 6px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  font-weight: 750;
+  grid-template-columns: minmax(0, 1fr) 58px 58px;
+  align-items: stretch;
+  gap: 7px;
 }
 
 .schedule-time-native-input {
   width: 100%;
-  min-height: 64px !important;
-  padding: 8px 12px !important;
+  min-width: 0;
+  min-height: 54px !important;
+  padding: 6px 9px !important;
   border: 2px solid var(--border) !important;
-  border-radius: 16px !important;
+  border-radius: 14px !important;
   background: var(--surface) !important;
   color: var(--text) !important;
-  font-size: 1.7rem !important;
+  font-size: 1.32rem !important;
   font-weight: 850 !important;
   line-height: 1 !important;
   text-align: center;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   touch-action: manipulation;
 }
 
@@ -145,45 +156,42 @@
 }
 
 .schedule-time-native-input::-webkit-calendar-picker-indicator {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   margin: 0;
   opacity: 0.82;
   cursor: pointer;
 }
 
-.schedule-time-adjustments {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-
-.schedule-time-adjustments strong {
-  min-width: 70px;
-  text-align: center;
-  font-size: 1.1rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.schedule-time-adjustments button,
+.schedule-time-main button,
 .schedule-time-presets button,
 .dosage-shortcuts button {
-  min-height: 46px;
-  padding: 8px;
+  min-height: 44px;
+  padding: 6px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--surface);
   color: var(--text);
-  font-weight: 750;
+  font-weight: 780;
   touch-action: manipulation;
+}
+
+.schedule-time-main button {
+  min-height: 54px;
+  font-size: 0.92rem;
 }
 
 .schedule-time-presets,
 .dosage-shortcuts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
+}
+
+.schedule-time-presets button {
+  min-width: 0;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .stock-fields {
@@ -209,13 +217,13 @@
 }
 
 /* Общий qa-ux.css использует более специфичное липкое правило.
-   На длинном экране времени полностью отключаем его, чтобы кнопки не закрывали поля. */
+   На экране времени полностью отключаем его, чтобы кнопки не закрывали поля. */
 .progress-track + .ui-card.add-step-card--step-3 .form-actions.add-step-actions {
   position: static !important;
   z-index: auto !important;
   inset: auto !important;
   bottom: auto !important;
-  margin: 20px 0 0 !important;
+  margin: 12px 0 0 !important;
   padding: 0 !important;
   border-top: 0 !important;
   border-radius: 0 !important;
@@ -242,15 +250,15 @@ html[data-keyboard-open='true'] .add-step-actions {
 @media (max-width: 420px) {
   .schedule-time-presets,
   .dosage-shortcuts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .schedule-time-row {
-    padding: 12px;
+    padding: 8px;
   }
 
-  .schedule-time-adjustments {
-    grid-template-columns: 1fr 76px 1fr;
+  .schedule-time-main {
+    grid-template-columns: minmax(0, 1fr) 52px 52px;
   }
 }
 

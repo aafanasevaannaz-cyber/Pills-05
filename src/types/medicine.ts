@@ -5,10 +5,27 @@ import type {
   VoiceRate,
 } from '@/features/sound/options'
 
+export type MedicineForm =
+  | 'tablet'
+  | 'capsule'
+  | 'sachet'
+  | 'drops'
+  | 'syrup'
+  | 'spray'
+  | 'inhaler'
+  | 'injection'
+  | 'cream'
+  | 'gel'
+  | 'patch'
+  | 'powder'
+  | 'solution'
+  | 'other'
+
 export interface Medicine {
   id: string
   name: string
   dosage: string
+  medicineForm?: MedicineForm
   frequency: 'daily' | 'every_other' | 'as_needed'
   scheduleType:
     | 'morning'
@@ -19,6 +36,7 @@ export interface Medicine {
     | 'three_times'
     | 'custom'
   customTimes?: string[]
+  paused?: boolean
   reminderSound?: ReminderSound
   reminderVolume?: ReminderVolume
   voiceEnabled?: boolean
@@ -26,6 +44,8 @@ export interface Medicine {
   voiceVolume?: ReminderVolume
   customVoiceVolume?: ReminderVolume
   voiceRate?: VoiceRate
+  androidVoiceName?: string
+  voicePitch?: number
   customVoicePath?: string
   endDate?: Date
   stockQuantity?: number

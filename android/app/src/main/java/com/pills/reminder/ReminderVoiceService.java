@@ -3,249 +3,112 @@ package com.pills.reminder;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.media.AudioAttributes;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
 import android.os.Build;
-import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-import java.io.File;
-import java.util.Locale;
+import java.lang.ref.WeakReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReminderVoiceService extends Service {
     private static final String TAG = "ReminderVoiceService";
-    private static final String CHANNEL_ID = "medicine-voice-service-v2";
+    private static final String CHANNEL_ID = "medicine-sequence-service-v2-rebuild3";
+    private static final String ACTION_STOP = "com.chaipodusham.pochasam.rebuild3.STOP_AUDIO";
     private static final int FOREGROUND_NOTIFICATION_ID = 719204;
+    private static final AtomicInteger GENERATION = new AtomicInteger(0);
+    private static WeakReference<ReminderVoiceService> activeService = new WeakReference<>(null);
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private TextToSpeech textToSpeech;
-    private MediaPlayer mediaPlayer;
-    private AudioManager audioManager;
-    private int previousAlarmVolume = -1;
+    private ReminderSequencePlayer sequencePlayer;
+    private int activeGeneration;
+
+    public static int stopAllActive(Context context) {
+        int generation = GENERATION.incrementAndGet();
+        ReminderVoiceService service = activeService.get();
+        if (service != null) {
+            service.stopImmediately("external stop", generation);
+        } else {
+            try {
+                context.stopService(new Intent(context, ReminderVoiceService.class));
+            } catch (Exception error) {
+                Log.w(TAG, "Fallback stopService failed", error);
+            }
+        }
+        return generation;
+    }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        sequencePlayer = new ReminderSequencePlayer(this);
+        activeService = new WeakReference<>(this);
         createServiceChannel();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        String text = intent == null ? "" : intent.getStringExtra("text");
-        float rate = intent == null ? 0.72f : intent.getFloatExtra("rate", 0.72f);
-        String voiceMode = intent == null ? "android" : intent.getStringExtra("voiceMode");
-        float voiceVolume = intent == null ? 1f : intent.getFloatExtra("voiceVolume", 1f);
-        float alarmVolume = intent == null ? 1f : intent.getFloatExtra("alarmVolume", 1f);
-        int delayBeforeVoiceMs = intent == null ? 4000 : intent.getIntExtra("delayBeforeVoiceMs", 4000);
-        String recordedVoicePath = intent == null ? "" : intent.getStringExtra("recordedVoicePath");
+        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            stopImmediately("notification action", GENERATION.incrementAndGet());
+            return START_NOT_STICKY;
+        }
+
+        activeGeneration = GENERATION.incrementAndGet();
+        final int runGeneration = activeGeneration;
+        ReminderSequencePlayer.Spec spec = new ReminderSequencePlayer.Spec();
+        spec.soundResource = value(intent, "soundResource", "medicine_classic_maximum.wav");
+        spec.alarmVolume = floatValue(intent, "alarmVolume", 1f);
+        spec.text = value(intent, "text", "Пора принять лекарство");
+        spec.rate = floatValue(intent, "rate", 0.72f);
+        spec.pitch = floatValue(intent, "pitch", 1f);
+        spec.voiceMode = value(intent, "voiceMode", "android");
+        spec.voiceVolume = floatValue(intent, "voiceVolume", 1f);
+        spec.voiceName = value(intent, "voiceName", "");
+        spec.recordedVoicePath = value(intent, "recordedVoicePath", "");
         int requestCode = intent == null ? 0 : intent.getIntExtra("requestCode", 0);
 
-        stopCurrentAudio(false);
-        applyAlarmVolume(alarmVolume);
-        startForeground(
-            FOREGROUND_NOTIFICATION_ID,
-            buildForegroundNotification(text == null || text.isEmpty() ? "Звуковое напоминание" : text)
-        );
-
-        String safeMode = voiceMode == null ? "android" : voiceMode;
-        String safeText = text == null ? "" : text;
-        String safePath = recordedVoicePath == null ? "" : recordedVoicePath;
-        float safeRate = Math.max(0.5f, Math.min(1.2f, rate));
-        float safeVoiceVolume = Math.max(0.05f, Math.min(1f, voiceVolume));
-        int safeDelay = Math.max(0, delayBeforeVoiceMs);
-
-        handler.postDelayed(() -> {
-            if ("off".equals(safeMode)) {
-                Log.i(TAG, "Reminder has no voice, requestCode=" + requestCode);
-                finishReminder(startId);
-                return;
+        startForeground(FOREGROUND_NOTIFICATION_ID, buildForegroundNotification(spec.text));
+        sequencePlayer.play(spec, new ReminderSequencePlayer.Listener() {
+            @Override public void onFinished() {
+                finishRun(startId, runGeneration, "completed");
             }
-
-            if ("recorded".equals(safeMode) && !safePath.isEmpty()) {
-                playRecordedVoice(safePath, safeVoiceVolume, requestCode, startId);
-                return;
+            @Override public void onError(Exception error) {
+                Log.e(TAG, "Reminder sequence failed, requestCode=" + requestCode, error);
+                finishRun(startId, runGeneration, "error");
             }
-
-            speakAndroidVoice(safeText, safeRate, safeVoiceVolume, requestCode, startId);
-        }, safeDelay);
-
-        Log.i(
-            TAG,
-            "Reminder audio service started, requestCode=" + requestCode +
-                ", alarmVolume=" + alarmVolume +
-                ", voiceMode=" + safeMode +
-                ", voiceVolume=" + safeVoiceVolume
-        );
+        });
+        Log.i(TAG, "Reminder sequence started, requestCode=" + requestCode + ", generation=" + runGeneration);
         return START_NOT_STICKY;
     }
 
-    private void applyAlarmVolume(float requestedLevel) {
-        if (audioManager == null) return;
-        try {
-            int maximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM);
-            int minimum = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                ? audioManager.getStreamMinVolume(AudioManager.STREAM_ALARM)
-                : 0;
-            if (previousAlarmVolume < 0) {
-                previousAlarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM);
-            }
-            float level = Math.max(0.05f, Math.min(1f, requestedLevel));
-            int target = Math.max(minimum, Math.min(maximum, Math.round(maximum * level)));
-            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, target, 0);
-            Log.i(TAG, "Alarm stream temporarily set to " + target + "/" + maximum);
-        } catch (Exception error) {
-            Log.w(TAG, "Could not set alarm stream volume", error);
-        }
+    private String value(Intent intent, String key, String fallback) {
+        if (intent == null) return fallback;
+        String value = intent.getStringExtra(key);
+        return value == null ? fallback : value;
     }
 
-    private void restoreAlarmVolume() {
-        if (audioManager == null || previousAlarmVolume < 0) return;
-        try {
-            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, previousAlarmVolume, 0);
-            Log.i(TAG, "Alarm stream restored to " + previousAlarmVolume);
-        } catch (Exception error) {
-            Log.w(TAG, "Could not restore alarm stream volume", error);
-        } finally {
-            previousAlarmVolume = -1;
-        }
+    private float floatValue(Intent intent, String key, float fallback) {
+        return intent == null ? fallback : intent.getFloatExtra(key, fallback);
     }
 
-    private void playRecordedVoice(
-        String path,
-        float volume,
-        int requestCode,
-        int startId
-    ) {
-        File file = new File(path);
-        if (!file.exists() || file.length() == 0) {
-            Log.e(TAG, "Recorded reminder voice is missing, requestCode=" + requestCode);
-            finishReminder(startId);
-            return;
-        }
-
-        try {
-            mediaPlayer = new MediaPlayer();
-            mediaPlayer.setAudioAttributes(
-                new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            );
-            mediaPlayer.setDataSource(file.getAbsolutePath());
-            mediaPlayer.setVolume(volume, volume);
-            mediaPlayer.setOnCompletionListener(player -> {
-                Log.i(TAG, "Recorded reminder voice completed, requestCode=" + requestCode);
-                player.release();
-                if (mediaPlayer == player) mediaPlayer = null;
-                finishReminder(startId);
-            });
-            mediaPlayer.setOnErrorListener((player, what, extra) -> {
-                Log.e(TAG, "Recorded reminder voice failed, what=" + what + ", extra=" + extra);
-                player.release();
-                if (mediaPlayer == player) mediaPlayer = null;
-                finishReminder(startId);
-                return true;
-            });
-            mediaPlayer.prepare();
-            mediaPlayer.start();
-            Log.i(TAG, "Recorded reminder voice started, requestCode=" + requestCode + ", volume=" + volume);
-        } catch (Exception error) {
-            Log.e(TAG, "Could not play recorded reminder voice", error);
-            finishReminder(startId);
-        }
+    private void finishRun(int startId, int generation, String reason) {
+        if (generation != activeGeneration || generation != GENERATION.get()) return;
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf(startId);
+        Log.i(TAG, "Reminder sequence finished: " + reason + ", generation=" + generation);
     }
 
-    private void speakAndroidVoice(
-        String text,
-        float rate,
-        float volume,
-        int requestCode,
-        int startId
-    ) {
-        if (text == null || text.trim().isEmpty()) {
-            finishReminder(startId);
-            return;
-        }
-
-        stopSpeech();
-        textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
-            if (status != TextToSpeech.SUCCESS || textToSpeech == null) {
-                Log.e(TAG, "Background TTS initialization failed: " + status);
-                finishReminder(startId);
-                return;
-            }
-
-            int languageResult = textToSpeech.setLanguage(new Locale("ru", "RU"));
-            if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
-                languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.e(TAG, "Russian background TTS unavailable: " + languageResult);
-                finishReminder(startId);
-                return;
-            }
-
-            textToSpeech.setSpeechRate(rate);
-            textToSpeech.setPitch(1.02f);
-            textToSpeech.setAudioAttributes(
-                new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            );
-            textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                @Override
-                public void onStart(String utteranceId) {
-                    Log.i(TAG, "Background Russian voice started, requestCode=" + requestCode + ", volume=" + volume);
-                }
-
-                @Override
-                public void onDone(String utteranceId) {
-                    Log.i(TAG, "Background Russian voice completed, requestCode=" + requestCode);
-                    finishReminder(startId);
-                }
-
-                @Override
-                public void onError(String utteranceId) {
-                    Log.e(TAG, "Background Russian voice failed, requestCode=" + requestCode);
-                    finishReminder(startId);
-                }
-
-                @Override
-                public void onError(String utteranceId, int errorCode) {
-                    Log.e(TAG, "Background Russian voice failed, code=" + errorCode);
-                    finishReminder(startId);
-                }
-            });
-
-            Bundle parameters = new Bundle();
-            parameters.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
-            textToSpeech.speak(
-                text,
-                TextToSpeech.QUEUE_FLUSH,
-                parameters,
-                "medicine-background-voice-" + requestCode
-            );
-        });
-    }
-
-    private void finishReminder(int startId) {
-        handler.post(() -> {
-            stopCurrentAudio(true);
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf(startId);
-        });
+    private void stopImmediately(String reason, int generation) {
+        activeGeneration = generation;
+        if (sequencePlayer != null) sequencePlayer.stop();
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
+        Log.i(TAG, "Reminder sequence stopped: " + reason + ", generation=" + generation);
     }
 
     @Nullable
@@ -256,8 +119,9 @@ public class ReminderVoiceService extends Service {
 
     @Override
     public void onDestroy() {
-        handler.removeCallbacksAndMessages(null);
-        stopCurrentAudio(true);
+        if (sequencePlayer != null) sequencePlayer.stop();
+        ReminderVoiceService current = activeService.get();
+        if (current == this) activeService.clear();
         super.onDestroy();
     }
 
@@ -267,50 +131,31 @@ public class ReminderVoiceService extends Service {
         if (manager == null || manager.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
-            "Голос лекарства",
+            "Идёт напоминание",
             NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Служебное уведомление во время озвучки лекарства");
+        channel.setDescription("Показывается только пока звучат сигнал и голос");
         channel.setSound(null, null);
         channel.enableVibration(false);
         manager.createNotificationChannel(channel);
     }
 
     private Notification buildForegroundNotification(String text) {
+        Intent stopIntent = new Intent(this, ReminderVoiceService.class);
+        stopIntent.setAction(ACTION_STOP);
+        PendingIntent stopPendingIntent = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? PendingIntent.getForegroundService(this, 8801, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
+            : PendingIntent.getService(this, 8801, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Пора принять лекарство")
+            .setContentTitle("Напоминание о лекарстве")
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSilent(true)
-            .setOngoing(false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .addAction(0, "Остановить", stopPendingIntent)
             .build();
-    }
-
-    private void stopCurrentAudio(boolean restoreVolume) {
-        handler.removeCallbacksAndMessages(null);
-        if (mediaPlayer != null) {
-            try {
-                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
-            } catch (Exception ignored) {
-            }
-            try {
-                mediaPlayer.release();
-            } catch (Exception ignored) {
-            }
-            mediaPlayer = null;
-        }
-        stopSpeech();
-        if (restoreVolume) restoreAlarmVolume();
-    }
-
-    private void stopSpeech() {
-        if (textToSpeech == null) return;
-        try {
-            textToSpeech.stop();
-            textToSpeech.shutdown();
-        } catch (Exception ignored) {
-        }
-        textToSpeech = null;
     }
 }

@@ -24,11 +24,11 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.moi.tabletki.reminder.safe"
+        applicationId "com.chaipodusham.pochasam.rebuild3"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "1.8-dim-diagnostics"
+        versionCode 2
+        versionName "3.1-time-fix"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

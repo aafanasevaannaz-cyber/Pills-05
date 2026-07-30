@@ -14,7 +14,7 @@ export const generateRemindersForDay = (medicines: Medicine[]): Reminder[] => {
   const dateKey = getDateKey(today)
 
   medicines.forEach((medicine) => {
-    if (medicine.frequency === 'as_needed') return
+    if (medicine.paused || medicine.frequency === 'as_needed') return
 
     if (medicine.endDate && new Date(medicine.endDate) < today) return
 

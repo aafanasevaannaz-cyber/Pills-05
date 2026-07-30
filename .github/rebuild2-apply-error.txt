@@ -1,0 +1,5 @@
+
+gzip: /tmp/rebuild2.patch.gz: unexpected end of file
+error: No valid patches in input (allow with "--allow-empty")
+
+decode=0 gzip=1 apply_check=128

@@ -129,17 +129,17 @@ jobs:
           "${ADB}" shell input keyevent 82 || true
           echo "Эмулятор Android 12 загружен." | tee -a "${RESULT_DIR}/logs/emulator-setup.txt"
 
-      - name: Run focused realme volume and custom voice scenario
+      - name: Run full rebuild 3 scenario
         id: qa
-        if: steps.emulator.outcome == 'success'
+        if: steps.emulator.conclusion == 'success'
         continue-on-error: true
         run: |
           export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-          chmod +x qa/android/run_realme_custom_voice_qa.sh qa/android/ui_pick.py
-          bash qa/android/run_realme_custom_voice_qa.sh apk/app-debug.apk
+          chmod +x qa/android/run_rebuild2_qa.sh qa/android/run_rebuild2_qa_v2.sh qa/android/run_rebuild3_time_qa.sh qa/android/ui_pick.py
+          bash qa/android/run_rebuild3_time_qa.sh apk/app-debug.apk
 
       - name: Record emulator infrastructure failure
-        if: steps.emulator.outcome != 'success'
+        if: steps.qa.conclusion == 'skipped'
         run: |
           RESULT_DIR="qa-results/realme-c55-android12-sound-fix"
           mkdir -p "${RESULT_DIR}/logs"
@@ -157,5 +157,23 @@ jobs:
           retention-days: 30
 
       - name: Fail after evidence upload
-        if: steps.emulator.outcome != 'success' || steps.qa.outcome == 'failure'
-        run: exit 1
+        if: always()
+        env:
+          EMULATOR_OUTCOME: ${{ steps.emulator.outcome }}
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+        run: |
+          SUMMARY="qa-results/realme-c55-android12-sound-fix/summary.md"
+          if [ "${EMULATOR_OUTCOME}" != "success" ]; then
+            echo "Android emulator failed: ${EMULATOR_OUTCOME}"
+            exit 1
+          fi
+          if [ "${QA_OUTCOME}" != "success" ]; then
+            echo "Android QA command failed: ${QA_OUTCOME}"
+            exit 1
+          fi
+          test -f "${SUMMARY}"
+          if grep -Eq 'Ошибок сценария: [1-9][0-9]*' "${SUMMARY}"; then
+            cat "${SUMMARY}"
+            exit 1
+          fi
+          grep -F 'Ошибок сценария: 0' "${SUMMARY}"

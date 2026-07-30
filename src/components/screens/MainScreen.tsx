@@ -23,7 +23,7 @@ const sameDay = (first: Date, second: Date) =>
   first.getDate() === second.getDate()
 
 const isMedicineScheduledOn = (medicine: Medicine, date: Date) => {
-  if (medicine.frequency === 'as_needed') return false
+  if (medicine.paused || medicine.frequency === 'as_needed') return false
   const target = new Date(date)
   target.setHours(12, 0, 0, 0)
   const created = new Date(medicine.createdAt)
@@ -108,7 +108,7 @@ export const MainScreen: React.FC = () => {
   }, [medicines])
 
   const lowStockMedicines = useMemo(
-    () => medicines.filter((medicine) => medicine.stockQuantity !== undefined && isRefillSoon(medicine)),
+    () => medicines.filter((medicine) => !medicine.paused && medicine.stockQuantity !== undefined && isRefillSoon(medicine)),
     [medicines]
   )
 

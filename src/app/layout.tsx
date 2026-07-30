@@ -1,16 +1,22 @@
 import type { Metadata, Viewport } from 'next'
 import '@/styles/globals.css'
+import '@/styles/base-ui-restored.css'
 import '@/styles/realme-fixes.css'
 import '@/styles/reminders.css'
 import '@/styles/soft-contrast.css'
 import '@/styles/brand-autocomplete.css'
+import '@/styles/qa-ux.css'
+import '@/styles/qa-ux-polish.css'
+import '@/styles/rebuild2.css'
+import '@/styles/time-entry-fix.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { DiagnosticsProvider } from '@/components/DiagnosticsProvider'
 import { BottomNav } from '@/components/BottomNav'
 import { BrandMark } from '@/components/BrandMark'
+import { AndroidUxEnhancer } from '@/components/AndroidUxEnhancer'
 
 export const metadata: Metadata = {
-  title: 'Мои таблетки',
+  title: 'По часам 3',
   description: 'Понятные напоминания о приёме лекарств',
 }
 
@@ -37,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <BrandMark compact />
               </footer>
               <BottomNav />
+              <AndroidUxEnhancer />
             </div>
           </ThemeProvider>
         </DiagnosticsProvider>

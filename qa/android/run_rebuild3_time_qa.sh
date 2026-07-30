@@ -44,7 +44,7 @@ for old, new in replacements.items():
 
 # Встраиваем следующие небольшие замены внутрь Python-генератора v2.
 # Там переменная text уже содержит основной Android QA-сценарий.
-injection = r'''
+injection = r"""
 early_stop_old = '''scroll_and_tap "Послушать всё напоминание" "04-preview-stop" 14 || exit 1
 sleep 1
 snapshot "04-preview-running"
@@ -86,7 +86,7 @@ for old, new, label in sound_replacements:
     if old not in text:
         raise SystemExit(f'Generated QA sound patch target not found: {label}')
     text = text.replace(old, new)
-'''
+"""
 
 marker = "path.write_text(text, encoding='utf-8')"
 if text.count(marker) != 1:

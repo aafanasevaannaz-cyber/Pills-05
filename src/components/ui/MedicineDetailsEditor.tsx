@@ -5,6 +5,7 @@ import {
   getDefaultDosageForForm,
   getDosagePresetsForForm,
   getMedicineFormOption,
+  inferUnitsPerIntakeFromDosage,
   medicineFormOptions,
 } from '@/features/medicines/forms'
 import type { MedicineDraft } from '@/features/medicines/draft'
@@ -15,18 +16,51 @@ interface MedicineDetailsEditorProps {
   update: (patch: Partial<MedicineDraft>) => void
 }
 
+const formatUnits = (value: number) => String(value).replace('.', ',')
+
 export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorProps) => {
   const formOption = getMedicineFormOption(draft.medicineForm)
   const dosageOptions = getDosagePresetsForForm(draft.medicineForm)
 
+  const updateDosage = (dosage: string, medicineForm = draft.medicineForm) => {
+    const inferred = inferUnitsPerIntakeFromDosage(dosage, medicineForm)
+    update({
+      dosage,
+      ...(draft.trackStock && inferred !== null ? { unitsPerIntake: String(inferred) } : {}),
+    })
+  }
+
   const changeForm = (medicineForm: MedicineForm) => {
     const currentDefault = getDefaultDosageForForm(draft.medicineForm)
     const shouldReplaceDosage = !draft.dosage.trim() || draft.dosage.trim() === currentDefault
+    const dosage = shouldReplaceDosage ? getDefaultDosageForForm(medicineForm) : draft.dosage
+    const inferred = inferUnitsPerIntakeFromDosage(dosage, medicineForm)
     update({
       medicineForm,
-      dosage: shouldReplaceDosage ? getDefaultDosageForForm(medicineForm) : draft.dosage,
+      dosage,
+      ...(draft.trackStock && inferred !== null ? { unitsPerIntake: String(inferred) } : {}),
     })
   }
+
+  const toggleStock = (trackStock: boolean) => {
+    if (!trackStock) {
+      update({ trackStock: false })
+      return
+    }
+    const inferred = inferUnitsPerIntakeFromDosage(
+      draft.dosage || getDefaultDosageForForm(draft.medicineForm),
+      draft.medicineForm
+    )
+    update({
+      trackStock: true,
+      ...(inferred !== null ? { unitsPerIntake: String(inferred) } : {}),
+    })
+  }
+
+  const inferredUnits = inferUnitsPerIntakeFromDosage(
+    draft.dosage || getDefaultDosageForForm(draft.medicineForm),
+    draft.medicineForm
+  )
 
   return (
     <div className="medicine-details-editor page-stack">
@@ -56,7 +90,7 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
             className={draft.dosage === dosage ? 'is-selected' : ''}
             aria-pressed={draft.dosage === dosage}
             key={dosage}
-            onClick={() => update({ dosage })}
+            onClick={() => updateDosage(dosage)}
           >
             {dosage}
           </button>
@@ -67,7 +101,7 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
         label="Дозировка или способ применения"
         value={draft.dosage}
         placeholder="Например: 10 мл, 2 капли, тонкий слой"
-        onChange={(event) => update({ dosage: event.target.value })}
+        onChange={(event) => updateDosage(event.target.value)}
         help={`Можно написать любое значение. Пустое поле сохранится как «${getDefaultDosageForForm(draft.medicineForm)}».`}
       />
 
@@ -111,11 +145,11 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
         <input
           type="checkbox"
           checked={draft.trackStock}
-          onChange={(event) => update({ trackStock: event.target.checked })}
+          onChange={(event) => toggleStock(event.target.checked)}
         />
         <span className="choice__text">
           <strong>Следить за остатком лекарства</strong>
-          <span className="choice__description">Подходит для таблеток, саше, капсул, миллилитров и других единиц</span>
+          <span className="choice__description">Необязательно. Если включить, приложение предупредит, когда запас заканчивается.</span>
         </span>
       </label>
 
@@ -129,15 +163,19 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
             step="0.5"
             value={draft.stockQuantity}
             onChange={(event) => update({ stockQuantity: event.target.value })}
+            help="Введите текущий остаток: например, 20 таблеток или 100 мл."
           />
           <Input
             label="Сколько расходуется за один приём"
             type="number"
             inputMode="decimal"
             min="0.1"
-            step="0.5"
+            step="0.25"
             value={draft.unitsPerIntake}
             onChange={(event) => update({ unitsPerIntake: event.target.value })}
+            help={inferredUnits !== null
+              ? `Подставлено из дозировки: ${formatUnits(inferredUnits)}. При необходимости можно изменить.`
+              : 'Не удалось определить автоматически. Укажите расход вручную.'}
           />
           <Input
             label="За сколько дней предупредить о пополнении"

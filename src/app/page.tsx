@@ -7,6 +7,7 @@ import { useMedicinesStore } from '@/features/medicines/store'
 import { useHistoryStore } from '@/features/history/store'
 import { useRemindersStore } from '@/features/reminders/store'
 import { useSettingsStore } from '@/features/settings/store'
+import { stopAllReminderAudio } from '@/features/sound/stopAllAudio'
 import { initializeCapacitor, isCapacitorAvailable } from '@/lib/capacitor'
 
 export default function Home() {
@@ -19,6 +20,13 @@ export default function Home() {
     const initialize = async () => {
       try {
         await initializeCapacitor()
+
+        // Первый запуск/обновление приложения никогда не является командой
+        // «послушать звук». Гасим возможный оставшийся preview или фоновой
+        // аудиосервис до восстановления расписания. Будущие будильники это не отменяет.
+        await stopAllReminderAudio().catch((error) => {
+          console.error('Startup audio cleanup failed:', error)
+        })
 
         const platform = isCapacitorAvailable() ? 'android' : 'web'
         useRemindersStore.getState().setPlatform(platform)

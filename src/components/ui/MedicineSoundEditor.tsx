@@ -67,6 +67,7 @@ export const MedicineSoundEditor = ({
     setBusy(true)
     setStatus('')
     try {
+      await stopAllReminderAudio()
       await action()
       if (success) setStatus(success)
     } catch (error) {
@@ -133,6 +134,40 @@ export const MedicineSoundEditor = ({
     setStatus('Отдельная запись удалена. Выбран голос Android.')
   }
 
+  const previewMelody = () => run(
+    () => previewReminderSound(draft.sound, draft.volume),
+    'Проиграна только выбранная мелодия.'
+  )
+
+  const previewVoiceOnly = () => {
+    if (draft.voiceMode === 'off') {
+      setStatus('Голос выключен. Выберите голос Android или свою запись.')
+      return
+    }
+    if (draft.voiceMode === 'recorded') {
+      if (!draft.customVoicePath) {
+        setStatus('Сначала запишите фразу или выберите сохранённую запись.')
+        return
+      }
+      void run(
+        () => previewCustomVoice(draft.customVoicePath, draft.customVoiceVolume),
+        'Проигран только голос, без мелодии.'
+      )
+      return
+    }
+    void run(
+      () => previewReminderVoice(
+        draft.name || 'лекарство',
+        draft.dosage || '1 таблетка',
+        draft.voiceRate,
+        draft.voiceVolume,
+        draft.androidVoiceName,
+        draft.voicePitch
+      ),
+      'Проигран только голос Android, без мелодии.'
+    )
+  }
+
   const previewAll = () => run(
     () => previewFullReminder({
       sound: draft.sound,
@@ -146,14 +181,16 @@ export const MedicineSoundEditor = ({
       medicineName: draft.name || 'лекарство',
       dosage: draft.dosage || '1 таблетка',
     }),
-    'Пример запущен. Голос начнётся сразу после окончания сигнала.'
+    draft.voiceMode === 'off'
+      ? 'Проиграно полное напоминание: только сигнал, потому что голос выключен.'
+      : 'Проиграно полное напоминание: мелодия и затем голос.'
   )
 
   return (
     <div className="medicine-sound-editor page-stack">
       <div>
         <h2 className="section-title">Сигнал</h2>
-        <p className="muted">Нажмите на вариант, чтобы сразу его услышать.</p>
+        <p className="muted">Сначала выберите мелодию. Она не заиграет сама — прослушивание запускается только кнопкой ниже.</p>
       </div>
 
       <div className="sound-option-grid" role="radiogroup" aria-label="Сигнал лекарства">
@@ -165,10 +202,7 @@ export const MedicineSoundEditor = ({
             className={`sound-option${draft.sound === option.id ? ' is-selected' : ''}`}
             disabled={busy || recording}
             key={option.id}
-            onClick={() => {
-              update({ sound: option.id })
-              void run(() => previewReminderSound(option.id, draft.volume))
-            }}
+            onClick={() => update({ sound: option.id })}
           >
             <span className="sound-option__icon" aria-hidden="true">
               {option.id === 'marimba' ? '▦' : option.id === 'digital' ? '◫' : option.id === 'alarm' ? '⏰' : '♪'}
@@ -177,7 +211,7 @@ export const MedicineSoundEditor = ({
               <strong>{option.title}</strong>
               <span>{option.description}</span>
             </span>
-            <span className="sound-option__check" aria-hidden="true">{draft.sound === option.id ? '✓' : '▶'}</span>
+            <span className="sound-option__check" aria-hidden="true">{draft.sound === option.id ? '✓' : ''}</span>
           </button>
         ))}
       </div>
@@ -187,9 +221,12 @@ export const MedicineSoundEditor = ({
         label="Громкость сигнала"
         value={draft.volume}
         onChange={(volume) => update({ volume })}
-        onPreview={(volume) => previewReminderSound(draft.sound, volume)}
         disabled={recording}
+        previewHint="Выберите громкость, затем нажмите «Послушать мелодию»."
       />
+      <Button variant="secondary" className="ui-button--full" disabled={busy || recording} onClick={() => void previewMelody()}>
+        ▶ Послушать мелодию
+      </Button>
 
       <div>
         <h2 className="section-title">После сигнала</h2>
@@ -223,7 +260,7 @@ export const MedicineSoundEditor = ({
             label="Громкость голоса"
             value={draft.voiceVolume}
             onChange={(voiceVolume) => update({ voiceVolume })}
-            onPreview={(volume) => previewReminderVoice(draft.name || 'лекарство', draft.dosage || '1 таблетка', draft.voiceRate, volume, draft.androidVoiceName, draft.voicePitch)}
+            previewHint="Выберите громкость, затем нажмите «Послушать голос»."
           />
           <div className="choice-grid" role="radiogroup" aria-label="Скорость голоса">
             {[
@@ -262,7 +299,7 @@ export const MedicineSoundEditor = ({
             label="Громкость записи"
             value={draft.customVoiceVolume}
             onChange={(customVoiceVolume) => update({ customVoiceVolume })}
-            onPreview={draft.customVoicePath ? (volume) => previewCustomVoice(draft.customVoicePath, volume) : undefined}
+            previewHint="Выберите громкость, затем нажмите «Послушать голос»."
             disabled={recording}
           />
 
@@ -278,8 +315,8 @@ export const MedicineSoundEditor = ({
               <div className="status-strip status-strip--success">
                 ✓ {draft.customVoicePath === sharedVoicePath ? 'Выбрана общая запись' : 'Отдельная запись сохранена'}
               </div>
-              <Button variant="secondary" className="ui-button--full" onClick={() => void previewCustomVoice(draft.customVoicePath, draft.customVoiceVolume)}>
-                ▶ Послушать запись
+              <Button variant="secondary" className="ui-button--full" disabled={busy} onClick={() => void previewVoiceOnly()}>
+                ▶ Послушать голос
               </Button>
               <Button variant="secondary" className="ui-button--full" onClick={() => void startRecording()}>
                 🎙 Записать отдельную фразу
@@ -308,8 +345,14 @@ export const MedicineSoundEditor = ({
         </div>
       )}
 
-      <Button variant="primary" className="ui-button--full" disabled={busy || recording} onClick={() => void previewAll()}>
-        ▶ Послушать всё напоминание
+      {draft.voiceMode === 'android' && (
+        <Button variant="secondary" className="ui-button--full" disabled={busy || recording} onClick={() => void previewVoiceOnly()}>
+          ▶ Послушать голос
+        </Button>
+      )}
+
+      <Button variant="primary" className="ui-button--full" disabled={busy || recording || (draft.voiceMode === 'recorded' && !draft.customVoicePath)} onClick={() => void previewAll()}>
+        ▶ Послушать всё вместе
       </Button>
       <Button variant="secondary" className="ui-button--full" onClick={() => void stopAllReminderAudio()}>
         ■ Остановить всё

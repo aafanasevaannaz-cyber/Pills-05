@@ -57,6 +57,43 @@ export function getDosagePresetsForForm(form?: MedicineForm): string[] {
   }
 }
 
+const stockCountableForms = new Set<MedicineForm>([
+  'tablet', 'capsule', 'sachet', 'drops', 'syrup', 'spray', 'inhaler',
+  'injection', 'patch', 'powder', 'solution', 'other',
+])
+
+function dosageNumber(value: string): number | null {
+  const normalized = value.trim().toLocaleLowerCase('ru-RU').replace(',', '.')
+  const mixedFraction = normalized.match(/^(\d+)\s*½/)
+  if (mixedFraction) return Number(mixedFraction[1]) + 0.5
+  if (normalized.startsWith('½')) return 0.5
+  if (normalized.startsWith('¼')) return 0.25
+  if (normalized.startsWith('¾')) return 0.75
+  const match = normalized.match(/^(\d+(?:\.\d+)?)/)
+  if (!match) return null
+  const amount = Number(match[1])
+  return Number.isFinite(amount) && amount > 0 ? amount : null
+}
+
+/**
+ * Returns how many tracked units are consumed by one intake when the dosage
+ * contains a countable quantity. Strengths such as "10 мг" are deliberately
+ * not treated as 10 tablets.
+ */
+export function inferUnitsPerIntakeFromDosage(
+  dosage: string,
+  form?: MedicineForm
+): number | null {
+  const value = dosage.trim().toLocaleLowerCase('ru-RU')
+  const resolvedForm = form ?? inferMedicineFormFromDosage(value)
+  if (!resolvedForm || !stockCountableForms.has(resolvedForm)) return null
+
+  const compatibleUnit = /таблет|капсул|саше|пакет|капл|\bмл\b|впрыск|вдох|инъекц|укол|пластыр|доз/.test(value)
+  if (!compatibleUnit && resolvedForm === 'other') return null
+
+  return dosageNumber(value)
+}
+
 function inferMedicineFormFromDosage(dosage: string): MedicineForm | undefined {
   const value = dosage.toLocaleLowerCase('ru-RU')
   if (value.includes('саше')) return 'sachet'

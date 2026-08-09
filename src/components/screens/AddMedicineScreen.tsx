@@ -33,6 +33,7 @@ export const AddMedicineScreen = () => {
   const [editingId, setEditingId] = useState('')
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
+  const [allowDuplicate, setAllowDuplicate] = useState(false)
 
   const medicines = useMedicinesStore((state) => state.medicines)
   const addMedicine = useMedicinesStore((state) => state.addMedicine)
@@ -59,6 +60,7 @@ export const AddMedicineScreen = () => {
     medicine.id !== editingId && medicine.name.trim().toLocaleLowerCase('ru-RU') === draft.name.trim().toLocaleLowerCase('ru-RU')
   )
   const update = (patch: Partial<MedicineDraft>) => {
+    if (Object.prototype.hasOwnProperty.call(patch, 'name')) setAllowDuplicate(false)
     setDraft((current) => ({ ...current, ...patch }))
     setStatus('')
   }
@@ -66,7 +68,9 @@ export const AddMedicineScreen = () => {
   const next = () => {
     if (step === 1) {
       if (!draft.name.trim()) return setStatus('Введите название лекарства.')
-      if (duplicate) return setStatus(`«${duplicate.name}» уже есть. Откройте его и измените расписание.`)
+      if (duplicate && !allowDuplicate) {
+        return setStatus('Такое название уже есть. Можно открыть существующую запись или добавить ещё одну.')
+      }
       setStep(2)
       return
     }
@@ -189,8 +193,33 @@ export const AddMedicineScreen = () => {
       <Card className={`ui-card--soft add-step-card add-step-card--step-${step}`}>
         {step === 1 && (
           <div className="page-stack">
-            <div><h2 className="section-title">Как называется лекарство?</h2><p className="muted">Напишите первую букву и выберите вариант либо введите своё название.</p></div>
+            <div><h2 className="section-title">Как называется лекарство?</h2><p className="muted">Начните вводить название. Можно выбрать подсказку или написать своё.</p></div>
             <MedicineNameInput value={draft.name} onChange={(name) => update({ name })} existingNames={medicines.map(({ name }) => name)} autoFocus />
+            {duplicate && !editingMedicine && (
+              <div className="page-stack">
+                <div className="status-strip" role="status">
+                  «{duplicate.name}» уже есть. Это не мешает создать вторую отдельную запись.
+                </div>
+                <div className="form-actions">
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push(`/add?edit=${encodeURIComponent(duplicate.id)}`)}
+                  >
+                    Открыть существующее
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setAllowDuplicate(true)
+                      setStatus('Будет создана ещё одна отдельная запись с этим названием.')
+                      setStep(2)
+                    }}
+                  >
+                    Добавить ещё одно
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

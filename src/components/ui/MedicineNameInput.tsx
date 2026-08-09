@@ -24,16 +24,23 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
   const [focused, setFocused] = useState(false)
   const [composing, setComposing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fieldRef = useRef<HTMLDivElement>(null)
   const lastDiagnosticRef = useRef('')
 
   const suggestions = useMemo(() => {
     const current = normalize(value)
-    return findMedicineNameSuggestions(value, existingNames, 10)
+    return findMedicineNameSuggestions(value, existingNames, 8)
       .filter((suggestion) => normalize(suggestion) !== current)
   }, [existingNames, value])
 
   const firstSuggestion = suggestions[0]
-  const open = value.trim().length > 0 && suggestions.length > 0
+  const open = focused && value.trim().length > 0 && suggestions.length > 0
+
+  const keepFieldVisible = () => {
+    window.setTimeout(() => {
+      fieldRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }, 120)
+  }
 
   useEffect(() => {
     const stateKey = [value.trim().length, suggestions.length, focused, composing].join(':')
@@ -62,15 +69,17 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
     window.setTimeout(() => {
       inputRef.current?.focus()
       inputRef.current?.setSelectionRange(suggestion.length, suggestion.length)
+      keepFieldVisible()
     }, 0)
   }
 
   const updateValue = (nextValue: string) => {
     onChange(nextValue)
+    keepFieldVisible()
   }
 
   return (
-    <div className="ui-field medicine-autocomplete">
+    <div ref={fieldRef} className="ui-field medicine-autocomplete">
       <label className="ui-label" htmlFor={id}>Название</label>
       <input
         ref={inputRef}
@@ -85,15 +94,16 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
         spellCheck={false}
         autoFocus={autoFocus}
         enterKeyHint="next"
-        aria-autocomplete="both"
+        aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={`${id}-suggestions`}
         onFocus={() => {
           setFocused(true)
+          keepFieldVisible()
           recordDiagnosticEvent('autocomplete.focus', { valueLength: value.trim().length })
         }}
         onBlur={() => {
-          setFocused(false)
+          window.setTimeout(() => setFocused(false), 120)
           recordDiagnosticEvent('autocomplete.blur', {
             valueLength: value.trim().length,
             suggestionCount: suggestions.length,
@@ -103,14 +113,8 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
         onCompositionEnd={(event) => {
           setComposing(false)
           updateValue(event.currentTarget.value)
-          recordDiagnosticEvent('autocomplete.compositionEnd', {
-            valueLength: event.currentTarget.value.trim().length,
-          })
         }}
-        onInput={(event) => {
-          const nextValue = event.currentTarget.value
-          updateValue(nextValue)
-        }}
+        onInput={(event) => updateValue(event.currentTarget.value)}
         onKeyDown={(event) => {
           if ((event.key === 'Tab' || event.key === 'ArrowRight') && firstSuggestion) {
             event.preventDefault()
@@ -123,32 +127,17 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
         {commonMedicineNames.map((name) => <option value={name} key={name} />)}
       </datalist>
 
-      {open && firstSuggestion ? (
-        <button
-          type="button"
-          className="medicine-autocomplete__complete"
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => choose(firstSuggestion, 'primary')}
-        >
-          <span>Нажмите, чтобы дописать</span>
-          <strong>{firstSuggestion}</strong>
-        </button>
-      ) : (
-        <p className="ui-help medicine-autocomplete__help">
-          После первой буквы здесь появится готовое название. Любое другое название можно написать вручную.
-        </p>
-      )}
-
-      {suggestions.length > 1 && (
+      {open && (
         <div
           id={`${id}-suggestions`}
           className="medicine-suggestions"
           role="listbox"
           aria-label="Подсказки названий"
           aria-live="polite"
+          style={{ maxHeight: 'min(42vh, 320px)', overflowY: 'auto', overscrollBehavior: 'contain' }}
         >
-          <p className="medicine-suggestions__title">Другие варианты</p>
-          {suggestions.slice(1, 6).map((suggestion) => (
+          <p className="medicine-suggestions__title">Выберите лекарство или продолжайте писать</p>
+          {suggestions.slice(0, 5).map((suggestion) => (
             <button
               type="button"
               className="medicine-suggestion"
@@ -162,6 +151,12 @@ export const MedicineNameInput: React.FC<MedicineNameInputProps> = ({
             </button>
           ))}
         </div>
+      )}
+
+      {!open && (
+        <p className="ui-help medicine-autocomplete__help">
+          Начните вводить название. Если нужного варианта нет, напишите его полностью вручную.
+        </p>
       )}
     </div>
   )

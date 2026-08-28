@@ -24,11 +24,11 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.chaipodusham.pochasam.final20260815"
+        applicationId "com.chaipodusham.pochasam.blister20260828"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "4.0-final-20260815"
+        versionName "4.1-blister-20260828"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

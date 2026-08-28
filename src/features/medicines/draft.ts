@@ -1,8 +1,5 @@
 import type { PersistedSettings } from '@/features/settings/store'
-import {
-  defaultMedicineForm,
-  getDefaultDosageForForm,
-} from '@/features/medicines/forms'
+import { defaultMedicineForm } from '@/features/medicines/forms'
 import type {
   ReminderSound,
   ReminderVolume,
@@ -34,6 +31,7 @@ export type MedicineDraft = {
   stockQuantity: string
   unitsPerIntake: string
   refillReminderDays: string
+  photoConfirmationMode: NonNullable<Medicine['photoConfirmationMode']>
 }
 
 type DraftSettings = Pick<
@@ -74,7 +72,7 @@ export const createDraft = (settings: DraftSettings): MedicineDraft => ({
   medicineForm: defaultMedicineForm,
   frequency: '',
   times: ['08:00'],
-  dosage: getDefaultDosageForForm(defaultMedicineForm),
+  dosage: '',
   sound: settings.soundChoice,
   volume: settings.volumeChoice,
   voiceMode: settings.defaultVoiceMode,
@@ -90,6 +88,7 @@ export const createDraft = (settings: DraftSettings): MedicineDraft => ({
   stockQuantity: '',
   unitsPerIntake: '1',
   refillReminderDays: '3',
+  photoConfirmationMode: 'optional',
 })
 
 export const draftFromMedicine = (medicine: Medicine): MedicineDraft => {
@@ -99,7 +98,7 @@ export const draftFromMedicine = (medicine: Medicine): MedicineDraft => {
     medicineForm,
     frequency: medicine.frequency,
     times: scheduleTimes(medicine),
-    dosage: medicine.dosage || getDefaultDosageForForm(medicineForm),
+    dosage: medicine.dosage || '',
     sound: medicine.reminderSound ?? 'classic',
     volume: medicine.reminderVolume ?? 'maximum',
     voiceMode: medicine.voiceMode ?? (medicine.voiceEnabled === false ? 'off' : 'android'),
@@ -115,6 +114,7 @@ export const draftFromMedicine = (medicine: Medicine): MedicineDraft => {
     stockQuantity: medicine.stockQuantity === undefined ? '' : String(medicine.stockQuantity),
     unitsPerIntake: String(medicine.unitsPerIntake ?? 1),
     refillReminderDays: String(medicine.refillReminderDays ?? 3),
+    photoConfirmationMode: medicine.photoConfirmationMode ?? 'off',
   }
 }
 

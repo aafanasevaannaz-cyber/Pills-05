@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Button } from '@/components/ui/Button'
 import { useSettingsStore } from '@/features/settings/store'
+import { blisterPhotoSrc, captureBlisterPhoto } from '@/features/photo/blisterPhoto'
 import {
   previewReminderSound,
   previewReminderVoice,
@@ -15,6 +16,7 @@ import {
   type ReminderVolume,
   type VoiceRate,
 } from '@/features/sound/options'
+import type { PhotoConfirmationMode } from '@/types'
 
 interface ReminderStopPlugin {
   stopAll(): Promise<{ stopped: boolean }>
@@ -39,7 +41,8 @@ interface ReminderScreenProps {
   reminderVolume: ReminderVolume
   medicineVoiceEnabled: boolean
   medicineVoiceRate: VoiceRate
-  onTaken: () => void
+  photoConfirmationMode: PhotoConfirmationMode
+  onTaken: (photoUri?: string) => void
   onSkipped: () => void
   onDelayed: () => void
 }
@@ -52,26 +55,26 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
   reminderVolume,
   medicineVoiceEnabled,
   medicineVoiceRate,
+  photoConfirmationMode,
   onTaken,
   onSkipped,
   onDelayed,
 }) => {
   const soundEnabled = useSettingsStore((state) => state.soundEnabled)
+  const [photoUri, setPhotoUri] = useState('')
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
 
   useEffect(() => {
     let voiceTimer: number | undefined
     const nativeAndroid = Capacitor.isNativePlatform()
 
-    // На Android сигнал уже воспроизводит системное уведомление. Не запускаем его
-    // второй раз из окна приложения, иначе получается утомительный двойной писк.
     if (soundEnabled && !nativeAndroid) {
       void previewReminderSound(reminderSound, reminderVolume).catch((error) => {
         console.error('Reminder sound failed:', error)
       })
     }
 
-    // На Android точный нативный будильник произносит фразу один раз даже при
-    // закрытом приложении. Голос WebView нужен только в браузере.
     if (medicineVoiceEnabled && !nativeAndroid) {
       const delay = soundEnabled ? getReminderSoundOption(reminderSound).previewDelayMs : 100
       voiceTimer = window.setTimeout(() => {
@@ -103,6 +106,31 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
     }
   }
 
+  const takePhoto = async () => {
+    if (photoBusy) return
+    setPhotoBusy(true)
+    setPhotoError('')
+    try {
+      await stopAllReminderAudio()
+      const uri = await captureBlisterPhoto()
+      if (uri) setPhotoUri(uri)
+      else setPhotoError('Фото не сделано. Можно открыть камеру ещё раз.')
+    } catch (error) {
+      console.error('Blister photo capture failed:', error)
+      setPhotoError('Не удалось сделать фото. Проверьте доступ к камере и попробуйте ещё раз.')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const confirmTaken = async () => {
+    if (photoConfirmationMode === 'required' && !photoUri) {
+      setPhotoError('Для этого лекарства сначала сделайте новое фото блистера.')
+      return
+    }
+    await finish(() => onTaken(photoUri || undefined))
+  }
+
   return (
     <section className="reminder-overlay" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
       <div className="reminder-overlay__panel ui-card reminder-hero">
@@ -111,11 +139,39 @@ export const ReminderScreen: React.FC<ReminderScreenProps> = ({
         <h1 className="reminder-name" id="reminder-title">{medicineName}</h1>
         <div className="reminder-meta">
           {scheduledTime && <span><strong>Время:</strong> {scheduledTime}</span>}
-          <span><strong>Дозировка:</strong> {dosage}</span>
+          {dosage && <span><strong>Дозировка:</strong> {dosage}</span>}
         </div>
+
+        {photoConfirmationMode !== 'off' && (
+          <div className="page-stack" style={{ width: '100%' }}>
+            <div className="status-strip" role="status">
+              {photoConfirmationMode === 'required'
+                ? 'Для отметки «Принято» нужно новое фото блистера.'
+                : 'Можно сфотографировать блистер — потом фото будет видно в истории приёма.'}
+            </div>
+            {photoUri && (
+              <img
+                src={blisterPhotoSrc(photoUri)}
+                alt="Фото блистера для этого приёма"
+                style={{ width: '100%', maxHeight: 260, objectFit: 'contain', borderRadius: 16 }}
+              />
+            )}
+            <Button variant="secondary" className="ui-button--full" disabled={photoBusy} onClick={() => void takePhoto()}>
+              {photoBusy ? 'Открываем камеру…' : photoUri ? '📷 Переснять блистер' : '📷 Сделать фото блистера'}
+            </Button>
+            <p className="muted" style={{ margin: 0 }}>Фото берётся только из камеры в момент приёма, не из галереи.</p>
+            {photoError && <div className="status-strip status-strip--warning" role="alert">{photoError}</div>}
+          </div>
+        )}
+
         <div className="reminder-actions">
-          <Button variant="primary" className="ui-button--full" onClick={() => void finish(onTaken)}>
-            ✓ Принято
+          <Button
+            variant="primary"
+            className="ui-button--full"
+            disabled={photoBusy || (photoConfirmationMode === 'required' && !photoUri)}
+            onClick={() => void confirmTaken()}
+          >
+            ✓ {photoConfirmationMode === 'required' && !photoUri ? 'Сначала сделайте фото' : 'Принято'}
           </Button>
           <Button variant="secondary" className="ui-button--full" onClick={() => void stopAllReminderAudio()}>
             ■ Остановить звук

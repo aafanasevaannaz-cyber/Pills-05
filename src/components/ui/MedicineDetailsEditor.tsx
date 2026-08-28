@@ -2,7 +2,6 @@
 
 import { Input } from '@/components/ui/Input'
 import {
-  getDefaultDosageForForm,
   getDosagePresetsForForm,
   getMedicineFormOption,
   inferUnitsPerIntakeFromDosage,
@@ -31,13 +30,9 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
   }
 
   const changeForm = (medicineForm: MedicineForm) => {
-    const currentDefault = getDefaultDosageForForm(draft.medicineForm)
-    const shouldReplaceDosage = !draft.dosage.trim() || draft.dosage.trim() === currentDefault
-    const dosage = shouldReplaceDosage ? getDefaultDosageForForm(medicineForm) : draft.dosage
-    const inferred = inferUnitsPerIntakeFromDosage(dosage, medicineForm)
+    const inferred = inferUnitsPerIntakeFromDosage(draft.dosage, medicineForm)
     update({
       medicineForm,
-      dosage,
       ...(draft.trackStock && inferred !== null ? { unitsPerIntake: String(inferred) } : {}),
     })
   }
@@ -47,26 +42,20 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
       update({ trackStock: false })
       return
     }
-    const inferred = inferUnitsPerIntakeFromDosage(
-      draft.dosage || getDefaultDosageForForm(draft.medicineForm),
-      draft.medicineForm
-    )
+    const inferred = inferUnitsPerIntakeFromDosage(draft.dosage, draft.medicineForm)
     update({
       trackStock: true,
       ...(inferred !== null ? { unitsPerIntake: String(inferred) } : {}),
     })
   }
 
-  const inferredUnits = inferUnitsPerIntakeFromDosage(
-    draft.dosage || getDefaultDosageForForm(draft.medicineForm),
-    draft.medicineForm
-  )
+  const inferredUnits = inferUnitsPerIntakeFromDosage(draft.dosage, draft.medicineForm)
 
   return (
     <div className="medicine-details-editor page-stack">
       <div>
         <h2 className="section-title">Форма и дозировка</h2>
-        <p className="muted">Выберите, что это: таблетка, капсула, саше, капли, спрей или другая форма. Дозировку можно изменить на любое значение.</p>
+        <p className="muted">Форма помогает понятнее показывать лекарство. Дозировка необязательна — приложение не подставляет её за вас.</p>
       </div>
 
       <label className="ui-field">
@@ -98,11 +87,11 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
       </div>
 
       <Input
-        label="Дозировка или способ применения"
+        label="Дозировка или способ применения — необязательно"
         value={draft.dosage}
-        placeholder="Например: 10 мл, 2 капли, тонкий слой"
+        placeholder="Например: 1 таблетка, 10 мл, 2 капли"
         onChange={(event) => updateDosage(event.target.value)}
-        help={`Можно написать любое значение. Пустое поле сохранится как «${getDefaultDosageForForm(draft.medicineForm)}».`}
+        help="Если оставить пустым, приложение сохранит пустое поле и ничего не будет предполагать."
       />
 
       <div>
@@ -140,6 +129,31 @@ export const MedicineDetailsEditor = ({ draft, update }: MedicineDetailsEditorPr
           onChange={(event) => update({ customEndDate: event.target.value })}
         />
       )}
+
+      <div>
+        <h2 className="section-title">Фото блистера после приёма</h2>
+        <p className="muted">Фото делается только камерой в момент отметки. Оно помогает позже проверить, действительно ли вы уже принимали лекарство.</p>
+        <div className="choice-grid" role="radiogroup" aria-label="Фото блистера после приёма">
+          {[
+            { id: 'off', title: 'Не использовать', description: 'Обычная отметка «Принято»' },
+            { id: 'optional', title: 'По желанию', description: 'Можно сфотографировать блистер, но это не обязательно' },
+            { id: 'required', title: 'Обязательно', description: 'Без нового фото приём нельзя отметить как принятый' },
+          ].map((option) => (
+            <label className={`choice${draft.photoConfirmationMode === option.id ? ' is-selected' : ''}`} key={option.id}>
+              <input
+                type="radio"
+                name="photo-confirmation"
+                checked={draft.photoConfirmationMode === option.id}
+                onChange={() => update({ photoConfirmationMode: option.id as MedicineDraft['photoConfirmationMode'] })}
+              />
+              <span className="choice__text">
+                <strong>{option.title}</strong>
+                <span className="choice__description">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
 
       <label className={`choice${draft.trackStock ? ' is-selected' : ''}`}>
         <input

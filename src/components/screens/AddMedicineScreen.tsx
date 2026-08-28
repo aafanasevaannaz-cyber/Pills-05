@@ -15,7 +15,6 @@ import {
   draftFromMedicine,
   type MedicineDraft,
 } from '@/features/medicines/draft'
-import { getDefaultDosageForForm } from '@/features/medicines/forms'
 import { useMedicinesStore } from '@/features/medicines/store'
 import { useRemindersStore } from '@/features/reminders/store'
 import { useSettingsStore } from '@/features/settings/store'
@@ -118,7 +117,7 @@ export const AddMedicineScreen = () => {
       id: editingMedicine?.id ?? Date.now().toString(),
       name: draft.name.trim(),
       medicineForm: draft.medicineForm,
-      dosage: draft.dosage.trim() || getDefaultDosageForForm(draft.medicineForm),
+      dosage: draft.dosage.trim(),
       frequency: draft.frequency || 'daily',
       scheduleType: 'custom',
       customTimes: draft.frequency === 'as_needed' ? undefined : Array.from(new Set(draft.times)).sort(),
@@ -132,6 +131,7 @@ export const AddMedicineScreen = () => {
       voicePitch: draft.voicePitch,
       androidVoiceName: draft.androidVoiceName,
       customVoicePath: draft.voiceMode === 'recorded' ? draft.customVoicePath : undefined,
+      photoConfirmationMode: draft.photoConfirmationMode,
       paused: editingMedicine?.paused ?? false,
       endDate: draft.frequency === 'as_needed' ? undefined : endDate,
       stockQuantity: draft.trackStock ? stock : undefined,

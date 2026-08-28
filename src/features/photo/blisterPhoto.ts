@@ -1,8 +1,12 @@
 'use client'
 
-import { Capacitor } from '@capacitor/core'
-import { Directory, Filesystem } from '@capacitor/filesystem'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 
+interface BlisterPhotoPlugin {
+  takePhoto(): Promise<{ uri: string }>
+}
+
+const NativeBlisterPhoto = registerPlugin<BlisterPhotoPlugin>('BlisterPhoto')
 const MAX_EDGE = 1280
 
 const openCameraFile = (): Promise<File | null> =>
@@ -61,24 +65,13 @@ const fileToJpegDataUrl = async (file: File): Promise<string> => {
 }
 
 export const captureBlisterPhoto = async (): Promise<string | null> => {
+  if (Capacitor.isNativePlatform()) {
+    const result = await NativeBlisterPhoto.takePhoto()
+    return result.uri || null
+  }
+
   const file = await openCameraFile()
-  if (!file) return null
-  const dataUrl = await fileToJpegDataUrl(file)
-
-  if (!Capacitor.isNativePlatform()) return dataUrl
-
-  const comma = dataUrl.indexOf(',')
-  if (comma < 0) throw new Error('Не удалось сохранить фотографию.')
-  const data = dataUrl.slice(comma + 1)
-  const path = `blister-photos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
-  await Filesystem.writeFile({
-    path,
-    data,
-    directory: Directory.Data,
-    recursive: true,
-  })
-  const result = await Filesystem.getUri({ path, directory: Directory.Data })
-  return result.uri
+  return file ? fileToJpegDataUrl(file) : null
 }
 
 export const blisterPhotoSrc = (uri?: string | null): string => {

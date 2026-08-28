@@ -5,4 +5,5 @@ export interface HistoryEntry {
   scheduledFor: Date
   status: 'taken' | 'skipped' | 'late'
   notes?: string
+  photoUri?: string
 }

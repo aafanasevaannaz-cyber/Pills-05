@@ -21,6 +21,8 @@ export type MedicineForm =
   | 'solution'
   | 'other'
 
+export type PhotoConfirmationMode = 'off' | 'optional' | 'required'
+
 export interface Medicine {
   id: string
   name: string
@@ -47,6 +49,7 @@ export interface Medicine {
   androidVoiceName?: string
   voicePitch?: number
   customVoicePath?: string
+  photoConfirmationMode?: PhotoConfirmationMode
   endDate?: Date
   stockQuantity?: number
   unitsPerIntake?: number

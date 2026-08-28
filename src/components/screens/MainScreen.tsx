@@ -142,7 +142,7 @@ export const MainScreen: React.FC = () => {
     ? medicines.find((medicine) => medicine.id === activeReminder.medicineId) ?? null
     : null
 
-  const addHistoryEntry = (status: 'taken' | 'skipped' | 'late') => {
+  const addHistoryEntry = (status: 'taken' | 'skipped' | 'late', photoUri?: string) => {
     if (!activeReminder) return
     addEntry({
       id: `${Date.now()}-${status}`,
@@ -150,6 +150,7 @@ export const MainScreen: React.FC = () => {
       takenAt: new Date(),
       scheduledFor: new Date(activeReminder.scheduledTime),
       status,
+      photoUri,
     })
   }
 
@@ -158,10 +159,10 @@ export const MainScreen: React.FC = () => {
     window.setTimeout(() => setActionMessage(null), 3000)
   }
 
-  const handleTaken = () => {
+  const handleTaken = (photoUri?: string) => {
     if (!activeReminder) return
     const medicineId = activeReminder.medicineId
-    addHistoryEntry('taken')
+    addHistoryEntry('taken', photoUri)
     markTaken(activeReminder.id)
     const updatedMedicine = consumeStock(medicineId)
     if (updatedMedicine) {
@@ -169,9 +170,9 @@ export const MainScreen: React.FC = () => {
         console.error('Stock refill reminder reschedule failed:', error)
       })
       const stock = updatedMedicine.stockQuantity ?? 0
-      showMessage(`Приём отмечен. Осталось: ${stock}`, stock <= 0 ? 'warning' : 'success')
+      showMessage(photoUri ? `Приём отмечен, фото сохранено. Осталось: ${stock}` : `Приём отмечен. Осталось: ${stock}`, stock <= 0 ? 'warning' : 'success')
     } else {
-      showMessage('Приём отмечен как принятый', 'success')
+      showMessage(photoUri ? 'Приём отмечен, фото блистера сохранено' : 'Приём отмечен как принятый', 'success')
     }
   }
 
@@ -316,7 +317,7 @@ export const MainScreen: React.FC = () => {
                     <h2 className="reminder-name">{nextDose.medicine.name}</h2>
                     <div className="reminder-meta">
                       <span><strong>Время:</strong> {nextDose.time}</span>
-                      <span><strong>Дозировка:</strong> {formatDosage(nextDose.medicine.dosage)}</span>
+                      {nextDose.medicine.dosage && <span><strong>Дозировка:</strong> {formatDosage(nextDose.medicine.dosage)}</span>}
                       {nextDose.medicine.stockQuantity !== undefined && (
                         <span><strong>Осталось:</strong> {nextDose.medicine.stockQuantity}</span>
                       )}
@@ -355,6 +356,7 @@ export const MainScreen: React.FC = () => {
           reminderVolume={activeMedicine.reminderVolume ?? defaultReminderVolume}
           medicineVoiceEnabled={activeMedicine.voiceEnabled !== false}
           medicineVoiceRate={activeMedicine.voiceRate ?? 'slow'}
+          photoConfirmationMode={activeMedicine.photoConfirmationMode ?? 'off'}
           onTaken={handleTaken}
           onDelayed={handleDelay}
           onSkipped={handleSkipped}

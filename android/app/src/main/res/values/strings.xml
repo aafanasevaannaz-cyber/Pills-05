@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">По часам — финал</string>
-    <string name="title_activity_main">По часам — финал</string>
-    <string name="package_name">com.chaipodusham.pochasam.final20260815</string>
-    <string name="custom_url_scheme">com.chaipodusham.pochasam.final20260815</string>
+    <string name="app_name">По часам — фото</string>
+    <string name="title_activity_main">По часам — фото</string>
+    <string name="package_name">com.chaipodusham.pochasam.blister20260828</string>
+    <string name="custom_url_scheme">com.chaipodusham.pochasam.blister20260828</string>
 </resources>

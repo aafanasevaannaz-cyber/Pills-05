@@ -4,6 +4,7 @@ import React from 'react'
 import { Card } from '@/components/ui/Card'
 import { useHistoryStore } from '@/features/history/store'
 import { useMedicinesStore } from '@/features/medicines/store'
+import { blisterPhotoSrc } from '@/features/photo/blisterPhoto'
 
 const statusLabels = {
   taken: 'Принято',
@@ -33,7 +34,7 @@ export const HistoryScreen: React.FC = () => {
       <header className="app-header">
         <div>
           <h1 className="app-title">История</h1>
-          <p className="app-subtitle">Когда лекарства были приняты, отложены или пропущены</p>
+          <p className="app-subtitle">Когда лекарства были приняты, отложены или пропущены. Фото блистера хранится рядом с конкретным приёмом.</p>
         </div>
       </header>
 
@@ -47,13 +48,14 @@ export const HistoryScreen: React.FC = () => {
           {entries.map((entry) => {
             const actedAt = new Date(entry.takenAt)
             const scheduledFor = new Date(entry.scheduledFor)
+            const photo = blisterPhotoSrc(entry.photoUri)
             return (
               <Card key={entry.id} className={statusClasses[entry.status]}>
                 <div className="medicine-row">
                   <div className="medicine-time">
                     {actedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  <div>
+                  <div className="medicine-copy" style={{ minWidth: 0 }}>
                     <h2 className="medicine-name">{medicineName(entry.medicineId)}</h2>
                     <p className="medicine-details"><strong>{statusLabels[entry.status]}</strong></p>
                     <p className="medicine-details">
@@ -65,6 +67,20 @@ export const HistoryScreen: React.FC = () => {
                       {' · по плану в '}
                       {scheduledFor.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                     </p>
+                    {entry.status === 'taken' && (
+                      entry.photoUri ? (
+                        <div className="page-stack" style={{ marginTop: 12 }}>
+                          <strong>Фото подтверждения</strong>
+                          <img
+                            src={photo}
+                            alt={`Фото блистера после приёма ${medicineName(entry.medicineId)}`}
+                            style={{ width: '100%', maxWidth: 420, maxHeight: 320, objectFit: 'contain', borderRadius: 16 }}
+                          />
+                        </div>
+                      ) : (
+                        <p className="medicine-details">Фото подтверждения: нет</p>
+                      )
+                    )}
                   </div>
                 </div>
               </Card>

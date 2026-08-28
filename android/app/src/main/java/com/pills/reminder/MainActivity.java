@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ReminderAudioPlugin.class);
         registerPlugin(ReminderStopPlugin.class);
+        registerPlugin(BlisterPhotoPlugin.class);
         super.onCreate(savedInstanceState);
         setVolumeControlStream(AudioManager.STREAM_ALARM);
     }

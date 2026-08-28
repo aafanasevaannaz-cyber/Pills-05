@@ -99,8 +99,8 @@ jobs:
           tail -n 120 ../gradle-build.log
           exit $status
 
-      - name: Verify and persist final APK
-        if: github.event_name == 'pull_request'
+      - name: Verify and persist blister-photo APK
+        if: github.event_name == 'pull_request' && github.head_ref == 'feature/blister-photo-20260828'
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -108,23 +108,19 @@ jobs:
           set -euo pipefail
           apk=android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$apk"
-          sha256sum "$apk" | tee Pills-final-20260815-sha256.txt
-          mkdir -p /tmp/pills-final
-          cp "$apk" /tmp/pills-final/Pills-final-20260815.apk
-          cp Pills-final-20260815-sha256.txt /tmp/pills-final/sha256.txt
+          sha256sum "$apk" | tee Pills-blister-photo-20260828-sha256.txt
+          mkdir -p /tmp/pills-blister-photo
+          cp "$apk" /tmp/pills-blister-photo/Pills-blister-photo-20260828.apk
+          cp Pills-blister-photo-20260828-sha256.txt /tmp/pills-blister-photo/Pills-blister-photo-20260828-sha256.txt
           git fetch origin "$HEAD_BRANCH"
-          if git ls-tree -r "origin/$HEAD_BRANCH" --name-only | grep -qx 'preview/Pills-final-20260815.apk'; then
-            echo 'Preview APK already persisted on head branch; skipping commit.'
-            exit 0
-          fi
           git checkout -B "$HEAD_BRANCH" "origin/$HEAD_BRANCH"
           mkdir -p preview
-          cp /tmp/pills-final/Pills-final-20260815.apk preview/Pills-final-20260815.apk
-          cp /tmp/pills-final/sha256.txt preview/Pills-final-20260815-sha256.txt
+          cp /tmp/pills-blister-photo/Pills-blister-photo-20260828.apk preview/Pills-blister-photo-20260828.apk
+          cp /tmp/pills-blister-photo/Pills-blister-photo-20260828-sha256.txt preview/Pills-blister-photo-20260828-sha256.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f preview/Pills-final-20260815.apk preview/Pills-final-20260815-sha256.txt
-          git commit -m 'ci: attach Pills final APK [skip ci]'
+          git add -f preview/Pills-blister-photo-20260828.apk preview/Pills-blister-photo-20260828-sha256.txt
+          git commit -m 'ci: attach Pills blister-photo APK [skip ci]' || exit 0
           git push origin HEAD:"$HEAD_BRANCH"
 
       - name: Upload Gradle diagnostics
